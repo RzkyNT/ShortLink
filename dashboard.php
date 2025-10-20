@@ -299,7 +299,15 @@ $stats = $stats_result->fetch_assoc();
         flex-wrap: wrap;
     }
 }
-
+.copy-btn {
+        background: #28a745;
+        border: none; color: white;
+        padding: 10px 20px; border-radius: 8px;
+        cursor: pointer; font-weight: 600;
+    }
+    .copy-btn:hover {
+        background: #218838;
+    }
     </style>
 </head>
 <body>
@@ -347,60 +355,64 @@ $stats = $stats_result->fetch_assoc();
                         <th>Actions</th>
                     </tr>
                 </thead>
-               <tbody>
-    <?php if ($result->num_rows > 0): ?>
-        <?php while ($row = $result->fetch_assoc()): ?>
-            <tr>
-                <td data-label="Short Code">
-                    <a href="<?= BASE_URL . $row['short_code'] ?>" target="_blank" class="short-url">
-                        <?= htmlspecialchars($row['short_code']) ?>
-                    </a>
-                </td>
-                <td data-label="Original URL" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                    <?= htmlspecialchars($row['original_url']) ?>
-                </td>
-                <td data-label="Title"><?= htmlspecialchars($row['title'] ?? '-') ?></td>
-                <td data-label="Clicks"><?= $row['click_count'] ?></td>
-                <td data-label="Status">
-                    <span class="status status-<?= $row['status'] ?>">
-                        <?= ucfirst($row['status']) ?>
-                    </span>
-                </td>
-                <td data-label="Created"><?= date('Y-m-d H:i', strtotime($row['created_at'])) ?></td>
-                <td data-label="Actions">
-                    <div class="action-btns">
-                        <a href="analytics.php?id=<?= $row['id'] ?>" class="action-btn btn-view">
-                            <i class="fa-solid fa-chart-line"></i> View
-                        </a>
-                        <a href="edit.php?id=<?= $row['id'] ?>" class="action-btn btn-edit">
-                            <i class="fa-solid fa-pen"></i> Edit
-                        </a>
-                        <a href="delete.php?id=<?= $row['id'] ?>"
-                           onclick="return confirm('Are you sure you want to delete this URL?')"
-                           class="action-btn btn-delete">
-                            <i class="fa-solid fa-trash"></i> Delete
-                        </a>
-                        <?php if (!empty($row['qr_path'])): ?>
-                            <a href="#"
-                               type="button"
-                                    class="action-btn btn-qrcode"
-                                    onclick="showQR('<?= htmlspecialchars($row['qr_path']) ?>', '<?= BASE_URL . $row['short_code'] ?>')">
-                                <i class="fa-solid fa-qrcode"></i> QR
-                            </a>
-                        <?php endif; ?>
-                    </div>
-                </td>
-            </tr>
-        <?php endwhile; ?>
-    <?php else: ?>
-        <tr>
-            <td colspan="7" class="no-data">
-                <i class="fa-regular fa-folder-open fa-lg"></i><br>
-                No URLs created yet. <a href="create.php" style="color:#667eea;">Create your first short URL</a>
-            </td>
-        </tr>
-    <?php endif; ?>
-</tbody>
+                <tbody>
+                <?php if ($result->num_rows > 0): ?>
+                    <?php while ($row = $result->fetch_assoc()): ?>
+                        <tr>
+                            <td data-label="Short Code">
+                                <button class="copy-btn" onclick="copyUrl('<?= BASE_URL . $row['short_code'] ?>', this)">
+                                    <i class="fa-solid fa-copy"></i>
+                                </button>
+                                <a href="<?= BASE_URL . $row['short_code'] ?>" target="_blank" class="short-url">
+                                    <?= htmlspecialchars($row['short_code']) ?>
+                                </a>
+
+                            </td>
+                            <td data-label="Original URL" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                <?= htmlspecialchars($row['original_url']) ?>
+                            </td>
+                            <td data-label="Title"><?= htmlspecialchars($row['title'] ?? '-') ?></td>
+                            <td data-label="Clicks"><?= $row['click_count'] ?></td>
+                            <td data-label="Status">
+                                <span class="status status-<?= $row['status'] ?>">
+                                    <?= ucfirst($row['status']) ?>
+                                </span>
+                            </td>
+                            <td data-label="Created"><?= date('Y-m-d H:i', strtotime($row['created_at'])) ?></td>
+                            <td data-label="Actions">
+                                <div class="action-btns">
+                                    <a href="analytics.php?id=<?= $row['id'] ?>" class="action-btn btn-view">
+                                        <i class="fa-solid fa-chart-line"></i> View
+                                    </a>
+                                    <a href="edit.php?id=<?= $row['id'] ?>" class="action-btn btn-edit">
+                                        <i class="fa-solid fa-pen"></i> Edit
+                                    </a>
+                                    <a href="delete.php?id=<?= $row['id'] ?>"
+                                    onclick="return confirm('Are you sure you want to delete this URL?')"
+                                    class="action-btn btn-delete">
+                                        <i class="fa-solid fa-trash"></i> Delete
+                                    </a>
+                                    <?php if (!empty($row['qr_path'])): ?>
+                                        <a href="#"
+                                        type="button"
+                                                class="action-btn btn-qrcode"
+                                                onclick="showQR('<?= htmlspecialchars($row['qr_path']) ?>', '<?= BASE_URL . $row['short_code'] ?>')">
+                                            <i class="fa-solid fa-qrcode"></i> QR
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endwhile; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="7" class="no-data">
+                            <i class="fa-regular fa-folder-open fa-lg"></i><br>
+                            No URLs created yet. <a href="create.php" style="color:#667eea;">Create your first short URL</a>
+                        </td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
             </table>
         </div>
     </div>
@@ -427,6 +439,24 @@ $stats = $stats_result->fetch_assoc();
 </div>
 
 <script>
+ function copyUrl(url, btn) {
+    navigator.clipboard.writeText(url).then(() => {
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+        btn.style.background = '#3ccf5a';
+        btn.title = "Copied!";
+        setTimeout(() => {
+            btn.innerHTML = '<i class="fa-solid fa-copy"></i>';
+            btn.style.background = '';
+            btn.title = "Copy URL";
+        }, 2000);
+    }).catch(err => {
+        console.error("Copy failed:", err);
+        alert("Gagal menyalin URL.");
+    });
+}
+
+
 function showQR(qrPath, shortUrl) {
     const modal = document.getElementById('qrModal');
     const img = document.getElementById('qrImage');

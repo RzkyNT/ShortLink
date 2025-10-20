@@ -224,17 +224,16 @@ function generateShortCode($length = 6) {
 
         .url-text { font-family: monospace; font-size: 15px; color: #a5b4fc; }
 
-        .copy-btn {
-            background: #4fd1c5;
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 16px;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-        .copy-btn:hover { background: #38b2ac; }
-
+        
+.copy-btn {
+        background: #28a745;
+        border: none; color: white;
+        padding: 10px 20px; border-radius: 8px;
+        cursor: pointer; font-weight: 600;
+    }
+    .copy-btn:hover {
+        background: #218838;
+    }
         @media (max-width: 600px) {
             .header { flex-direction: column; align-items: flex-start; gap: 10px; }
             .form-card { padding: 25px; }
@@ -257,8 +256,11 @@ function generateShortCode($length = 6) {
         <?php if ($success): ?>
             <div class="success"><i class="fa-solid fa-circle-check"></i> <?= htmlspecialchars($success) ?>
                 <div class="created-url">
-                    <span class="url-text" id="createdUrl"><?= htmlspecialchars($created_url) ?></span>
-                    <button class="copy-btn" onclick="copyUrl()"><i class="fa-solid fa-copy"></i> Copy</button>
+                <span class="url-text" id="createdUrl"><?= htmlspecialchars($created_url) ?></span>
+                <button class="copy-btn" onclick="copyUrl(this)">
+                        <i class="fa-solid fa-copy"></i>
+                    </button>
+
                 </div>
                 <?php if ($qr_path): ?>
                     <div style="margin-top:15px; text-align:center;">
@@ -288,17 +290,21 @@ function generateShortCode($length = 6) {
                 <input type="text" id="custom_code" name="custom_code" placeholder="my-link" pattern="[a-zA-Z0-9-_]{3,}">
             </div>
 
-            <button type="submit" class="btn"><i class="fa-solid fa-scissors"></i> Create Short URL</button>
+            <button type="submit" class="btn" style="cursor: pointer;"><i class="fa-solid fa-scissors"></i> Create Short URL</button>
         </form>
     </div>
-
-    <script>
-        function copyUrl() {
-            const urlText = document.getElementById('createdUrl').textContent;
-            navigator.clipboard.writeText(urlText).then(() => {
-                alert('URL copied to clipboard!');
-            });
-        }
-    </script>
+    
+        <script>
+function copyUrl() {
+    const urlText = document.getElementById('createdUrl').textContent.trim();
+    navigator.clipboard.writeText(urlText).then(() => {
+        const btn = document.querySelector('.copy-btn');
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+        btn.style.background = '#3ccf5a';
+        setTimeout(() => { btn.innerHTML = original; btn.style.background = '#28a745'; }, 2000);
+    });
+}
+</script>
 </body>
 </html>
