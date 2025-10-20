@@ -1,0 +1,31 @@
+Username
+if0_40199145 
+Password
+12rizqi3  
+Status
+Label
+Website for am.ct.ws
+Website IP
+185.27.134.24
+Hosting Volume
+vol4_2
+Home Directory
+/home/vol4_2/infinityfree.com/if0_40199145
+Creation Date
+2025-10-18
+
+MySQL Connection Details
+MySQL Username
+if0_40199145 
+MySQL Password
+12rizqi3  
+MySQL Database Name
+if0_40199145_XXX
+See below for available database names
+MySQL Hostname
+sql110.infinityfree.com
+MySQL Port (optional)
+3306
+List of MySQL Databases
+Database Name	Actions
+if0_40199145_url_shortner

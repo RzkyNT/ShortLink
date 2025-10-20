@@ -1,0 +1,24 @@
+# Enable Rewrite Engine
+RewriteEngine On
+RewriteBase /
+
+# Redirect to HTTPS (optional, remove if not using SSL)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Don't rewrite files and directories
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Don't rewrite admin files
+RewriteCond %{REQUEST_URI} !^/(index|login|logout|dashboard|create|edit|delete|analytics|install|redirect)\.php
+RewriteCond %{REQUEST_URI} !^/config/
+
+# Rewrite short codes to redirect.php
+RewriteRule ^([a-zA-Z0-9_-]+)$ redirect.php?code=$1 [L,QSA]
+
+# Prevent directory listing
+Options -Indexes
+
+# Set default charset
+AddDefaultCharset UTF-8
