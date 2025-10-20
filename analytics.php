@@ -59,6 +59,8 @@ $conn->close();
 <title>Analytics - <?= htmlspecialchars($url_data['short_code']) ?></title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="icon" type="image/png" href="favicon.png">
+
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
