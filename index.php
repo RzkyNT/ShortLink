@@ -356,6 +356,11 @@ $conn->close();
             <p>Use your own branded codes for better recognition.</p>
         </div>
         <div class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-qrcode"></i></div>
+            <h3>Qr Code Generator</h3>
+            <p>Use your own branded codes for better recognition.</p>
+        </div>
+        <div class="feature-card">
             <div class="feature-icon"><i class="fa-solid fa-shield-halved"></i></div>
             <h3>Security</h3>
             <p>All URLs encrypted and monitored for spam protection.</p>
