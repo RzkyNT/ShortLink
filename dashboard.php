@@ -313,7 +313,9 @@ $stats = $stats_result->fetch_assoc();
 <body>
     <div class="header">
         <div class="header-content">
+            <a href="index.php" style="text-decoration: none; color: white;">
             <h1><i class="fa-solid fa-link"></i> URL Shortener Dashboard</h1>
+            </a>
             <div class="user-info">
                 <span><i class="fa-regular fa-user"></i> <?= htmlspecialchars($_SESSION['username']) ?></span>
                 <a href="logout.php" class="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
