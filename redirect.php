@@ -26,6 +26,9 @@ if ($result->num_rows === 0) {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>404 - URL Not Found</title>
         <link rel="icon" type="image/png" href="favicon.png">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
         <style>
             body {
                 font-family: 'Inter', sans-serif;
@@ -71,7 +74,7 @@ if ($result->num_rows === 0) {
     <body>
         <div class="box">
             <h1>404</h1>
-            <p>🔍 Short URL not found or inactive.</p>
+            <p><i class="fas fa-"></i> Short URL not found or inactive.</p>
             <a href="index.php">Back to Home</a>
         </div>
     </body>
