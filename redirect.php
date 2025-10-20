@@ -186,22 +186,48 @@ $host = parse_url($target_url, PHP_URL_HOST);
             color: #667eea;
             text-decoration: none;
         }
+        .branding {
+    position: fixed;
+    bottom: 15px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 13px;
+    color: #666;
+    opacity: 0.8;
+}
+
+.branding a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.branding a:hover {
+    text-decoration: underline;
+}
+
     </style>
 </head>
 <body>
     <div class="redirect-box">
-        <i class="fa-solid fa-spinner"></i>
-        <h1>Redirecting you...</h1>
-        <p>You're being redirected to:</p>
-        <div class="target"><?= htmlspecialchars($host ?? $target_url) ?></div>
+    <i class="fa-solid fa-spinner"></i>
+    <h1>Redirecting you...</h1>
+    <p>You're being redirected to:</p>
+    <div class="target"><?= htmlspecialchars($host ?? $target_url) ?></div>
 
-        <div class="progress-bar">
-            <div class="progress-fill"></div>
-        </div>
-
-        <div class="manual">
-            Not redirected? <a href="<?= htmlspecialchars($target_url) ?>">Click here</a>
-        </div>
+    <div class="progress-bar">
+        <div class="progress-fill"></div>
     </div>
+
+    <div class="manual">
+        Not redirected? <a href="<?= htmlspecialchars($target_url) ?>">Click here</a>
+    </div>
+</div>
+
+<!-- Branding kecil -->
+<footer class="branding">
+    🔗 Shortened with <a href="<?= BASE_URL ?? 'index.php' ?>">URL Shortener</a>
+</footer>
 </body>
 </html>
