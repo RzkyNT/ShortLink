@@ -46,11 +46,19 @@ function generateShortCode($length = 6) {
 }
 
 $conn = getDBConnection();
-$stats_query = "SELECT 
-    COUNT(DISTINCT u.id) as total_urls,
-    COUNT(c.id) as total_clicks
+
+$stats_query = "
+    SELECT 
+        COUNT(DISTINCT u.id) AS total_urls,
+        COUNT(c.id) AS total_clicks,
+        SUM(CASE WHEN u.access_password IS NOT NULL THEN 1 ELSE 0 END) AS protected_links,
+        SUM(CASE WHEN u.one_time = 1 THEN 1 ELSE 0 END) AS one_time_links,
+        SUM(CASE WHEN u.expire_at IS NOT NULL AND u.expire_at < NOW() THEN 1 ELSE 0 END) AS expired_links,
+        COUNT(DISTINCT u.user_id) AS active_users
     FROM urls u
-    LEFT JOIN url_clicks c ON u.id = c.url_id";
+    LEFT JOIN url_clicks c ON u.id = c.url_id
+";
+
 $stats_result = $conn->query($stats_query);
 $stats = $stats_result->fetch_assoc();
 $conn->close();
@@ -346,20 +354,20 @@ $conn->close();
             <h3>Instant Shortening</h3>
             <p>Create short links instantly — no registration needed!</p>
         </div>
-        <div class="feature-card">
-            <div class="feature-icon"><i class="fa-solid fa-chart-line"></i></div>
-            <h3>Analytics</h3>
-            <p>Track clicks, devices, and geolocation data (with account).</p>
+         <div class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-chart-simple"></i></div>
+            <h3>Detailed Analytics</h3>
+            <p>Track clicks, visitor countries, browsers, and devices — all in real-time dashboards.</p>
         </div>
         <div class="feature-card">
             <div class="feature-icon"><i class="fa-solid fa-pencil"></i></div>
             <h3>Custom Links</h3>
-            <p>Use your own branded codes for better recognition.</p>
+            <p>Create branded short codes for better recognition and marketing.</p>
         </div>
         <div class="feature-card">
             <div class="feature-icon"><i class="fa-solid fa-qrcode"></i></div>
-            <h3>Qr Code Generator</h3>
-            <p>Use your own branded codes for better recognition.</p>
+            <h3>QR Code Generator</h3>
+            <p>Generate QR codes for any link — easy sharing across devices.</p>
         </div>
         <div class="feature-card">
             <div class="feature-icon"><i class="fa-solid fa-shield-halved"></i></div>
@@ -369,9 +377,25 @@ $conn->close();
         <div class="feature-card">
             <div class="feature-icon"><i class="fa-solid fa-mobile-screen"></i></div>
             <h3>Responsive</h3>
-            <p>Optimized for mobile, tablet, and desktop.</p>
+            <p>Optimized for mobile, tablet, and desktop devices.</p>
         </div>
-    </div>
+        <!-- Fitur baru -->
+        <div class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-lock"></i></div>
+            <h3>Password Protection</h3>
+            <p>Protect your links with a password so only authorized users can access them.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+            <h3>One-Time Use</h3>
+            <p>Create links that expire after a single click — perfect for sensitive sharing.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon"><i class="fa-solid fa-calendar-xmark"></i></div>
+            <h3>Url Expiration</h3>
+            <p>Set expiration dates for individual short URLs automatically.</p>
+        </div>
+        </div>
 </section>
 
 <section class="stats" id="stats">
@@ -386,20 +410,115 @@ $conn->close();
             <p>Total Clicks</p>
         </div>
         <div class="stat-item">
+            <h2><?= number_format($stats['protected_links']) ?>+</h2>
+            <p>Password-Protected Links</p>
+        </div>
+        <div class="stat-item">
+            <h2><?= number_format($stats['one_time_links']) ?>+</h2>
+            <p>One-Time Use Links</p>
+        </div>
+        <div class="stat-item">
+            <h2><?= number_format($stats['expired_links']) ?>+</h2>
+            <p>Expired Links</p>
+        </div>
+        <!-- <div class="stat-item">
+            <h2><?= number_format($stats['active_users']) ?>+</h2>
+            <p>Active Users</p>
+        </div> -->
+        <div class="stat-item">
             <h2>99.9%</h2>
             <p>Uptime</p>
         </div>
     </div>
 </section>
 
+
 <section class="cta">
-    <h2>Manage Your Links Smarter</h2>
-    <p>Join now and get advanced tracking and analytics dashboard.</p>
+  <div class="cta-content">
+    <h2>Track, Shorten & Optimize Your Links</h2>
+    <p>Sign up today to get real-time analytics, track every click, and maximize your link performance.</p>
     <div class="cta-buttons">
-        <a href="login.php" class="btn-primary"><i class="fa-solid fa-user"></i> Login</a>
-        <a href="#hero" class="btn-secondary" onclick="document.querySelector('input[name=original_url]').focus(); return false;"><i class="fa-solid fa-link"></i> Create Link</a>
+      <a href="login.php" class="btn btn-primary" style="color:white">
+        <i class="fa-solid fa-user" aria-hidden="true"></i> Access Dashboard
+      </a>
+      <a href="#hero" class="btn btn-secondary" id="create-link-btn">
+        <i class="fa-solid fa-link" aria-hidden="true"></i> Shorten Your First Link
+      </a>
     </div>
+  </div>
 </section>
+
+<style>
+.cta {
+  padding: 80px 20px;
+  text-align: center;
+  background: linear-gradient(135deg, #6a11cb, #2575fc);
+  color: #fff;
+  border-radius: 12px;
+  margin: 40px auto;
+  max-width: 900px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+.cta h2 {
+  font-size: 2.5rem;
+  margin-bottom: 20px;
+}
+.cta p {
+  font-size: 1.2rem;
+  margin-bottom: 30px;
+}
+.cta-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 28px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+.btn-primary {
+  background-color: #fff;
+  color: #2575fc;
+}
+.btn-primary:hover {
+  background-color: #e0e0e0;
+}
+.btn-secondary {
+  background-color: transparent;
+  border: 2px solid #fff;
+  color: #fff;
+}
+.btn-secondary:hover {
+  background-color: rgba(255,255,255,0.2);
+  border-color: #fff;
+}
+@media(max-width: 600px) {
+  .cta h2 {
+    font-size: 2rem;
+  }
+  .cta p {
+    font-size: 1rem;
+  }
+}
+</style>
+
+<script>
+document.getElementById('create-link-btn').addEventListener('click', function(e){
+  e.preventDefault();
+  const input = document.querySelector('input[name=original_url]');
+  if(input){
+    input.focus();
+  }
+});
+</script>
 
 <footer>
     <p>&copy; <?= date('Y') ?> URL Shortener — All rights reserved.</p>

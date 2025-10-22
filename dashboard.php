@@ -238,6 +238,10 @@ $stats = $stats_result->fetch_assoc();
             color: #dc3545;
         }
 
+        .status-expired {
+            background: rgba(255, 255, 255, 0.24);
+            color: #000000bb;
+        }
         /* Empty State */
         .no-data {
             text-align: center;
@@ -370,7 +374,7 @@ $stats = $stats_result->fetch_assoc();
                                 </a>
 
                             </td>
-                            <td data-label="Original URL" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <td data-label="Original URL" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                 <?= htmlspecialchars($row['original_url']) ?>
                             </td>
                             <td data-label="Title"><?= htmlspecialchars($row['title'] ?? '-') ?></td>
@@ -394,11 +398,11 @@ $stats = $stats_result->fetch_assoc();
                                     class="action-btn btn-delete">
                                         <i class="fa-solid fa-trash"></i> Delete
                                     </a>
-                                    <?php if (!empty($row['qr_path'])): ?>
+                                   <?php if (!empty($row['qr_base64'])): ?>
                                         <a href="#"
                                         type="button"
-                                                class="action-btn btn-qrcode"
-                                                onclick="showQR('<?= htmlspecialchars($row['qr_path']) ?>', '<?= BASE_URL . $row['short_code'] ?>')">
+                                        class="action-btn btn-qrcode"
+                                        onclick="showQR('<?= $row['qr_base64'] ?>', '<?= BASE_URL . $row['short_code'] ?>')">
                                             <i class="fa-solid fa-qrcode"></i> QR
                                         </a>
                                     <?php endif; ?>
@@ -418,27 +422,23 @@ $stats = $stats_result->fetch_assoc();
             </table>
         </div>
     </div>
-    <!-- Popup QR Modal -->
-<div id="qrModal" style="
-    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7);
-    justify-content:center; align-items:center; z-index:9999;">
-    <div style="
-        background:#1a1c25; padding:30px; border-radius:12px; text-align:center;
-        max-width:300px; width:90%; box-shadow:0 10px 30px rgba(0,0,0,0.5); position:relative;">
-        <button onclick="closeQR()" style="
-            position:absolute; top:8px; right:12px; background:none; border:none;
-            color:#fff; font-size:20px; cursor:pointer;">&times;</button>
-        <h3 style="margin-bottom:15px; color:#a5b4fc;">QR Code</h3>
-        <img id="qrImage" src="" alt="QR Code" style="width:180px; height:180px; border-radius:8px;">
-        <div style="margin-top:15px;">
-            <a id="qrDownload" href="#" download class="btn" 
-               style="background:#4fd1c5; display:inline-block;">
-               <i class="fa-solid fa-download"></i> Download
-            </a>
+    <div id="qrModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7);
+        justify-content:center; align-items:center; z-index:9999;">
+            <div style="background:#1a1c25; padding:30px; border-radius:12px; text-align:center;
+                max-width:300px; width:90%; box-shadow:0 10px 30px rgba(0,0,0,0.5); position:relative;">
+                <button onclick="closeQR()" style="position:absolute; top:8px; right:12px; background:none; border:none;
+                    color:#fff; font-size:20px; cursor:pointer;">&times;</button>
+                <h3 style="margin-bottom:15px; color:#a5b4fc;">QR Code</h3>
+                <img id="qrImage" src="" alt="QR Code" style="width:180px; height:180px; border-radius:8px;">
+                <div style="margin-top:15px;">
+                    <a id="qrDownload" href="#" download class="btn" style="background:#4fd1c5; display:inline-block;">
+                        <i class="fa-solid fa-download"></i> Download
+                    </a>
+                </div>
+                <p id="qrUrl" style="margin-top:10px; color:#a5b4fc; font-size:13px; word-break:break-all;"></p>
+            </div>
         </div>
-        <p id="qrUrl" style="margin-top:10px; color:#a5b4fc; font-size:13px; word-break:break-all;"></p>
-    </div>
-</div>
+
 
 <script>
  function copyUrl(url, btn) {
@@ -458,15 +458,15 @@ $stats = $stats_result->fetch_assoc();
     });
 }
 
-
-function showQR(qrPath, shortUrl) {
+function showQR(qrBase64, shortUrl) {
     const modal = document.getElementById('qrModal');
     const img = document.getElementById('qrImage');
     const download = document.getElementById('qrDownload');
     const qrUrlText = document.getElementById('qrUrl');
 
-    img.src = qrPath;
-    download.href = qrPath;
+    img.src = qrBase64;
+    download.href = qrBase64;
+    download.download = `Qr ${shortUrl.replace(/[^a-zA-Z0-9-_]/g,'_')}.png`;
     qrUrlText.textContent = shortUrl;
 
     modal.style.display = 'flex';
@@ -480,3 +480,4 @@ function closeQR() {
 </body>
 </html>
 <?php $conn->close(); ?>
+

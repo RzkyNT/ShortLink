@@ -9,60 +9,135 @@ if (!isset($_SESSION['user_id'])) {
 
 $error = '';
 $url_data = null;
-
+$participants = [];
 $url_id = $_GET['id'] ?? 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && $url_id) {
     $conn = getDBConnection();
     $user_id = $_SESSION['user_id'];
+
+    // Ambil data URL
     $stmt = $conn->prepare("SELECT * FROM urls WHERE id = ? AND user_id = ?");
     $stmt->bind_param("ii", $url_id, $user_id);
     $stmt->execute();
     $result = $stmt->get_result();
-    
+
     if ($result->num_rows === 0) {
         header('Location: dashboard.php');
         exit;
     }
-    
+
     $url_data = $result->fetch_assoc();
+
+    // Jika mode per_code, ambil daftar peserta
+    if ($url_data['access_mode'] === 'per_code') {
+        $pstmt = $conn->prepare("SELECT * FROM url_codes WHERE url_id = ?");
+        $pstmt->bind_param("i", $url_id);
+        $pstmt->execute();
+        $participants = $pstmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $pstmt->close();
+    }
+
     $stmt->close();
     $conn->close();
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $conn = getDBConnection();
+    $user_id = $_SESSION['user_id'];
+
     $url_id = $_POST['id'] ?? 0;
-    $original_url = trim($_POST['original_url'] ?? '');
     $title = trim($_POST['title'] ?? '');
     $status = $_POST['status'] ?? 'active';
-    $user_id = $_SESSION['user_id'];
-    
-    if (empty($original_url)) {
-        $error = 'Please enter a URL';
-    } elseif (!filter_var($original_url, FILTER_VALIDATE_URL)) {
-        $error = 'Please enter a valid URL';
-    } else {
-        $conn = getDBConnection();
-        $stmt = $conn->prepare("UPDATE urls SET original_url = ?, title = ?, status = ? WHERE id = ? AND user_id = ?");
-        $stmt->bind_param("sssii", $original_url, $title, $status, $url_id, $user_id);
-        
-        if ($stmt->execute()) {
-            header('Location: dashboard.php?success=updated');
-            exit;
-        } else {
-            $error = 'Error updating URL: ' . $conn->error;
-        }
-        
-        $stmt->close();
-        $conn->close();
-    }
-    
-    $conn = getDBConnection();
-    $stmt = $conn->prepare("SELECT * FROM urls WHERE id = ? AND user_id = ?");
+    $expire_at = !empty($_POST['expire_at']) ? date('Y-m-d H:i:s', strtotime($_POST['expire_at'])) : null;
+    $one_time = isset($_POST['one_time']) ? 1 : 0;
+
+    // Ambil mode
+    $stmt = $conn->prepare("SELECT access_mode FROM urls WHERE id = ? AND user_id = ?");
     $stmt->bind_param("ii", $url_id, $user_id);
     $stmt->execute();
-    $url_data = $stmt->get_result()->fetch_assoc();
+    $mode_result = $stmt->get_result()->fetch_assoc();
+    $access_mode = $mode_result['access_mode'] ?? 'public';
     $stmt->close();
+    $access_password = trim($_POST['access_password'] ?? '');
+    $access_password = $access_password !== '' ? $access_password : null;
+
+    if ($access_mode === 'public') {
+        $original_url = trim($_POST['original_url'] ?? '');
+        if (empty($original_url)) {
+            $error = 'Please enter a URL';
+        } elseif (!filter_var($original_url, FILTER_VALIDATE_URL)) {
+            $error = 'Please enter a valid URL';
+        } else {
+            
+            $stmt = $conn->prepare("
+                UPDATE urls 
+                SET original_url = ?, title = ?, status = ?, expire_at = ?, one_time = ?, access_password = ?
+                WHERE id = ? AND user_id = ?
+            ");
+            $stmt->bind_param("ssssissi", $original_url, $title, $status, $expire_at, $one_time, $access_password, $url_id, $user_id);
+            $stmt->execute();
+            $stmt->close();
+            header('Location: dashboard.php?success=updated');
+            exit;
+        }
+    } elseif ($access_mode === 'per_code') {
+        // Update data utama
+        $stmt = $conn->prepare("
+            UPDATE urls 
+            SET title = ?, status = ?, expire_at = ?, one_time = ?
+            WHERE id = ? AND user_id = ?
+        ");
+        $stmt->bind_param("sssiii", $title, $status, $expire_at, $one_time, $url_id, $user_id);
+        $stmt->execute();
+        $stmt->close();
+
+        // Update daftar peserta
+        if (isset($_POST['participants']) && is_array($_POST['participants'])) {
+            foreach ($_POST['participants'] as $p) {
+                $pid = intval($p['id'] ?? 0);
+                $name = trim($p['name'] ?? '');
+                $code = trim($p['code'] ?? '');
+                $target_url = trim($p['target_url'] ?? '');
+
+                if (empty($code) || empty($target_url)) continue;
+
+                if ($pid > 0) {
+                    // Update existing participant
+                    $pstmt = $conn->prepare("UPDATE url_codes SET participant_name=?, code=?, target_url=? WHERE id=? AND url_id=?");
+                    $pstmt->bind_param("sssii", $name, $code, $target_url, $pid, $url_id);
+                } else {
+                    // Insert new participant
+                    $pstmt = $conn->prepare("INSERT INTO url_codes (url_id, participant_name, code, target_url) VALUES (?, ?, ?, ?)");
+                    $pstmt->bind_param("isss", $url_id, $name, $code, $target_url);
+                }
+                $pstmt->execute();
+                $pstmt->close();
+            }
+        }
+        // Hapus peserta yang ditandai
+            $deleted_ids = $_POST['deleted_participants'] ?? '';
+            if (!empty($deleted_ids)) {
+                $ids = array_filter(array_map('intval', explode(',', $deleted_ids)));
+                if (!empty($ids)) {
+                    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+                    $types = str_repeat('i', count($ids));
+
+                    $sql = "DELETE FROM url_codes WHERE id IN ($placeholders) AND url_id = ?";
+                    $stmt = $conn->prepare($sql);
+
+                    // Gabungkan semua ID + url_id
+                    $params = [...$ids, $url_id];
+                    $stmt->bind_param($types . 'i', ...$params);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
+
+        header('Location: dashboard.php?success=updated');
+        exit;
+    }
+
     $conn->close();
 }
 ?>
@@ -74,6 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <title>Edit URL</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <script src="assets/sweetalert2.js"></script>
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
     body {
@@ -210,55 +286,468 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .header { flex-direction: column; align-items: flex-start; gap: 10px; }
         .form-card { padding: 25px; }
     }
+input, select {
+    width:100%; padding:12px; border-radius:8px;
+    border:2px solid rgba(255,255,255,0.1);
+    background:rgba(0,0,0,0.3); color:white;
+}
+
+/* Menambahkan style fokus yang konsisten untuk select */
+select:focus {
+    outline: none; 
+    border-color: #667eea; /* Warna fokus yang sama dengan input teks */
+}
+
+/* Style tambahan untuk <select> agar panah dropdown lebih terlihat */
+select {
+    /* Menghilangkan panah default pada beberapa browser */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    
+    /* Tambahkan panah kustom menggunakan background image */
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%23ccc' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px top 50%;
+    padding-right: 30px; /* Tambah padding agar panah tidak menimpa teks */
+    cursor: pointer;
+}
+
+/* Style untuk opsi di dalam dropdown, walau implementasinya tergantung OS/Browser */
+select option {
+    background-color: #1a1c25; /* Background gelap saat dropdown terbuka */
+    color: #fff;
+    padding: 10px;
+}
+.checkbox-group {
+    /* Menampung checkbox dan label */
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px; /* Jarak bawah sesuai form-group */
+}
+
+/* Sembunyikan checkbox asli */
+.checkbox-group input[type="checkbox"] {
+    position: absolute;
+    opacity: 0; /* Sembunyikan, tapi tetap dapat diakses */
+    width: 0;
+    height: 0;
+}
+
+/* Style untuk label kustom (pengganti checkbox) */
+.checkbox-group label {
+    /* Reset style label form-group yang umum */
+    display: inline-flex; 
+    align-items: center;
+    cursor: pointer;
+    font-weight: 400; /* Font yang lebih ringan untuk teks opsi */
+    color: #ccc;
+    margin: 0; /* Hapus margin yang tidak perlu */
+    padding-left: 0;
+}
+
+/* Visual kotak checkbox kustom */
+.checkbox-group label::before {
+    content: '';
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    margin-right: 10px; /* Jarak antara kotak dan teks */
+    border: 2px solid rgba(255, 255, 255, 0.2); /* Border agar sesuai dengan input */
+    border-radius: 4px; /* Sudut sedikit melengkung */
+    background: rgba(0, 0, 0, 0.3); /* Background gelap */
+    transition: all 0.2s ease-in-out;
+    flex-shrink: 0; /* Agar kotak tidak mengecil */
+}
+
+/* Style saat checkbox dicentang */
+.checkbox-group input[type="checkbox"]:checked + label::before {
+    background: #667eea; /* Warna background ungu/biru saat dicentang */
+    border-color: #667eea; /* Warna border yang sama */
+    /* Tambahkan tanda centang kustom (seperti ikon atau bayangan) */
+    box-shadow: inset 0 0 0 4px #0f111a; /* Efek 'tick' sederhana */
+}
+
+/* Style saat checkbox mendapatkan fokus (keyboard accessibility) */
+.checkbox-group input[type="checkbox"]:focus + label::before {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.5); /* Glowing effect dari warna utama */
+}
+
+/* Style saat kursor di atas label */
+.checkbox-group label:hover::before {
+    border-color: #667eea;
+}
+
+/* Teks label untuk opsi 'One-time Access' (Jika ada dalam HTML Anda) */
+.checkbox-group label span {
+    font-size: 14px; /* Ukuran font yang konsisten */
+}
+
+
+.form-card {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    padding: 35px;
+    border-radius: 16px;
+    max-width: 850px;
+    width: 100%;
+}
+label { display:block; margin:10px 0 5px; color:#ccc; font-weight:600; }
+input, select {
+    width:100%; padding:12px; border-radius:8px;
+    border:2px solid rgba(255,255,255,0.1);
+    background:rgba(0,0,0,0.3); color:white;
+}
+.btn {
+    background:#667eea; color:white; border:none;
+    padding:12px 22px; border-radius:8px; margin-top:10px; cursor:pointer;
+}
+.btn:hover { background:#5568d3; }
+/* Style untuk Checkbox */
+.checkbox-group {
+    /* Menampung checkbox dan label */
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px; /* Jarak bawah sesuai form-group */
+}
+
+/* Sembunyikan checkbox asli */
+.checkbox-group input[type="checkbox"] {
+    position: absolute;
+    opacity: 0; /* Sembunyikan, tapi tetap dapat diakses */
+    width: 0;
+    height: 0;
+}
+
+/* Style untuk label kustom (pengganti checkbox) */
+.checkbox-group label {
+    /* Reset style label form-group yang umum */
+    display: inline-flex; 
+    align-items: center;
+    cursor: pointer;
+    font-weight: 400; /* Font yang lebih ringan untuk teks opsi */
+    color: #ccc;
+    margin: 0; /* Hapus margin yang tidak perlu */
+    padding-left: 0;
+}
+
+/* Visual kotak checkbox kustom */
+.checkbox-group label::before {
+    content: '';
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    margin-right: 10px; /* Jarak antara kotak dan teks */
+    border: 2px solid rgba(255, 255, 255, 0.2); /* Border agar sesuai dengan input */
+    border-radius: 4px; /* Sudut sedikit melengkung */
+    background: rgba(0, 0, 0, 0.3); /* Background gelap */
+    transition: all 0.2s ease-in-out;
+    flex-shrink: 0; /* Agar kotak tidak mengecil */
+}
+
+/* Style saat checkbox dicentang */
+.checkbox-group input[type="checkbox"]:checked + label::before {
+    background: #667eea; /* Warna background ungu/biru saat dicentang */
+    border-color: #667eea; /* Warna border yang sama */
+    /* Tambahkan tanda centang kustom (seperti ikon atau bayangan) */
+    box-shadow: inset 0 0 0 4px #0f111a; /* Efek 'tick' sederhana */
+}
+
+/* Style saat checkbox mendapatkan fokus (keyboard accessibility) */
+.checkbox-group input[type="checkbox"]:focus + label::before {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.5); /* Glowing effect dari warna utama */
+}
+
+/* Style saat kursor di atas label */
+.checkbox-group label:hover::before {
+    border-color: #667eea;
+}
+
+/* Teks label untuk opsi 'One-time Access' (Jika ada dalam HTML Anda) */
+.checkbox-group label span {
+    font-size: 14px; /* Ukuran font yang konsisten */
+}
+
+input, select {
+    width:100%; padding:12px; border-radius:8px;
+    border:2px solid rgba(255,255,255,0.1);
+    background:rgba(0,0,0,0.3); color:white;
+}
+
+select:focus {
+    outline: none; 
+    border-color: #667eea; /* Warna fokus yang sama dengan input teks */
+}
+
+/* Style tambahan untuk <select> agar panah dropdown lebih terlihat */
+select {
+    /* Menghilangkan panah default pada beberapa browser */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    
+    /* Tambahkan panah kustom menggunakan background image */
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%23ccc' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px top 50%;
+    padding-right: 30px; /* Tambah padding agar panah tidak menimpa teks */
+    cursor: pointer;
+}
+
+/* Style untuk opsi di dalam dropdown, walau implementasinya tergantung OS/Browser */
+select option {
+    background-color: #1a1c25; /* Background gelap saat dropdown terbuka */
+    color: #fff;
+    padding: 10px;
+}
+
+
+/* Override warna ikon kalender dan jam pada input[type="datetime-local"] (hanya bekerja pada beberapa browser) */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1); /* Membalik warna agar terlihat di background gelap */
+    opacity: 0.7;
+    cursor: pointer;
+}
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+/* Style Placeholder agar terlihat di input datetime-local yang kosong */
+input[type="datetime-local"]:not([value]):valid {
+    color: #ccc; /* Warna teks normal */
+}
+input[type="datetime-local"]:not([value]):valid::-webkit-datetime-edit-text,
+input[type="datetime-local"]:not([value]):valid::-webkit-datetime-edit-month-field,
+input[type="datetime-local"]:not([value]):valid::-webkit-datetime-edit-day-field,
+input[type="datetime-local"]:not([value]):valid::-webkit-datetime-edit-year-field,
+input[type="datetime-local"]:not([value]):valid::-webkit-datetime-edit-hour-field,
+input[type="datetime-local"]:not([value]):valid::-webkit-datetime-edit-minute-field {
+    color: #ccc; /* Pastikan bagian-bagian tanggal/waktu juga putih */
+}
+
+.participant-row input {
+    margin-bottom: 8px;
+}
+
+.participant-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.participant-row input {
+    flex: 1 1 30%;
+}
+.participant-row input {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+#public-section, #individual-section {
+    transition: all 0.3s ease;
+}
+.delete-btn {
+    background: #ff4d4d;
+    border: none;
+    width: 35px;
+    height: 45px;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+.delete-btn:hover {
+    background: #e03e3e;
+}
+.swal2-popup {
+  border-radius: 1rem !important;
+  font-family: 'Poppins', sans-serif;
+}
+.swal2-title {
+  font-weight: 600;
+}
+
 </style>
 </head>
 <body>
-    <div class="header">
-        <h1><i class="fas fa-edit"></i> Edit Short URL</h1>
-        <a href="dashboard.php" class="back-btn"><i class="fas fa-arrow-left"></i> Back</a>
-    </div>
+   <div class="header">
+    <h1><i class="fas fa-edit"></i> Edit Short URL</h1>
+    <a href="dashboard.php" class="btn"><i class="fas fa-arrow-left"></i> Back</a>
+</div>
 
-    <div class="form-card">
-        <h2><i class="fas fa-link"></i> Edit URL Details</h2>
-        
-        <?php if ($error): ?>
-            <div class="error"><?= htmlspecialchars($error) ?></div>
-        <?php endif; ?>
-        
+<div class="form-card">
+<?php if ($error): ?>
+    <div class="error"><?= htmlspecialchars($error) ?></div>
+<?php endif; ?>
         <?php if ($url_data): ?>
             <div class="form-group">
                 <label>Short Code</label>
                 <div class="info">
                     <?= BASE_URL . htmlspecialchars($url_data['short_code']) ?> (cannot be changed)
+                    <br>
+                    Mode:<?= htmlspecialchars($url_data['access_mode']) ?>
                 </div>
             </div>
             
             <form method="POST" action="">
-                <input type="hidden" name="id" value="<?= $url_data['id'] ?>">
-                
-                <div class="form-group">
-                    <label for="original_url">Original URL *</label>
-                    <input type="url" id="original_url" name="original_url" 
-                           value="<?= htmlspecialchars($url_data['original_url']) ?>" required>
+        <input type="hidden" name="id" value="<?= $url_data['id'] ?>">
+
+        <label>Title</label>
+        <input type="text" name="title" value="<?= htmlspecialchars($url_data['title']) ?>">
+
+        <label style="margin-top: 10px;">Status</label>
+        <select name="status">
+            <option value="active" <?= $url_data['status']==='active'?'selected':'' ?>>Active</option>
+            <option value="inactive" <?= $url_data['status']==='inactive'?'selected':'' ?>>Inactive</option>
+        </select>
+        
+        <label>Password</label>
+        <input type="text" name="access_password" placeholder="Optional" value="<?= $url_data['access_password']?? '' ?>">
+        
+        <label style="margin-top: 10px;">Expiration Date</label>
+        <input type="datetime-local" name="expire_at" value="<?= $url_data['expire_at'] ? date('Y-m-d\TH:i', strtotime($url_data['expire_at'])) : '' ?>">
+        <div class="checkbox-group" style="margin-top: 20px;">
+                <input type="checkbox" id="one_time" name="one_time" <?= $url_data['one_time'] ? 'checked' : '' ?>>
+                <label for="one_time">One-time Access</label>
+            </div>
+
+        <?php if ($url_data['access_mode'] === 'public'): ?>
+            <label>Original URL *</label>
+            <input type="url" name="original_url" value="<?= htmlspecialchars($url_data['original_url']) ?>" required>
+        <?php else: ?>
+            <h3>Participants</h3>
+            <div id="participants-container">
+                <?php foreach ($participants as $i => $p): ?>
+                <div class="participant-row">
+                    <input type="hidden" name="participants[<?= $i ?>][id]" value="<?= $p['id'] ?>">
+                    <input type="text" name="participants[<?= $i ?>][name]" value="<?= htmlspecialchars($p['participant_name']) ?>" placeholder="Nama">
+                    <input type="text" name="participants[<?= $i ?>][code]" value="<?= htmlspecialchars($p['code']) ?>" placeholder="Kode Unik">
+                    <input type="url" name="participants[<?= $i ?>][target_url]" value="<?= htmlspecialchars($p['target_url']) ?>" placeholder="URL Tujuan">
+                    <button type="button" class="delete-btn" data-id="<?= $p['id'] ?>"><i class="fas fa-trash"></i></button>
                 </div>
-                
-                <div class="form-group">
-                    <label for="title">Title</label>
-                    <input type="text" id="title" name="title" 
-                           value="<?= htmlspecialchars($url_data['title'] ?? '') ?>">
-                </div>
-                
-                <div class="form-group">
-                    <label for="status">Status</label>
-                    <select id="status" name="status">
-                        <option value="active" <?= $url_data['status'] === 'active' ? 'selected' : '' ?>>Active</option>
-                        <option value="inactive" <?= $url_data['status'] === 'inactive' ? 'selected' : '' ?>>Inactive</option>
-                    </select>
-                </div>
-                
-                <button type="submit" class="btn"><i class="fas fa-save"></i> Update URL</button>
-            </form>
+                <?php endforeach; ?>
+            </div>
+            <button type="button" id="addParticipantBtn" class="btn" type="button">+ Add Participant</button>
         <?php endif; ?>
-    </div>
+        <input type="hidden" id="deleted_participants" name="deleted_participants" value="">
+        <button style="margin-top: 10px;" type="submit" class="btn"><i class="fas fa-save"></i> Update</button>
+    </form>
+<?php endif; ?>
+</div>
+
+<script>
+      // Format datetime untuk atribut min
+    function formatDateTime(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        const h = String(date.getHours()).padStart(2, '0');
+        const i = String(date.getMinutes()).padStart(2, '0');
+        return `${y}-${m}-${d}T${h}:${i}`;
+    }
+    // Set min semua input datetime-local
+    document.querySelectorAll('input[type="datetime-local"]').forEach(input => {
+        input.min = formatDateTime(new Date());
+    });
+
+    document.getElementById('addParticipantBtn')?.addEventListener('click', () => {
+    const container = document.getElementById('participants-container');
+    const idx = container.children.length;
+    const row = document.createElement('div');
+    row.className = 'participant-row';
+    
+    // Assign a temporary unique class to easily target this row for deletion
+    row.id = `participant-row-${idx}`; 
+    
+    row.innerHTML = `
+        <input type="hidden" name="participants[${idx}][id]" value="0">
+        <input type="text" name="participants[${idx}][name]" placeholder="Nama">
+        <input type="text" name="participants[${idx}][code]" placeholder="Kode Unik" required>
+        <input type="url" name="participants[${idx}][target_url]" placeholder="URL Tujuan" required>
+        
+        <button type="button" class="delete-btn new-row" onclick="removeParticipantRow('participant-row-${idx}')" title="Hapus baris ini">
+            <i class="fas fa-trash"></i>
+        </button>
+    `;
+    container.appendChild(row);
+});
+
+// Tambahkan fungsi global untuk menghapus baris
+function removeParticipantRow(rowId) {
+    const row = document.getElementById(rowId);
+    if (row) {
+        row.remove();
+    }
+}
+        // SweetAlert Delete Confirmation
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('delete-btn')) {
+        const btn = e.target;
+        const row = btn.closest('.participant-row');
+        const pid = btn.getAttribute('data-id');
+
+        Swal.fire({
+            title: 'Hapus Peserta?',
+            text: 'Data peserta ini akan dihapus permanen.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Ya, hapus!',
+            cancelButtonText: 'Batal'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Catat ID yang dihapus
+                const deletedInput = document.getElementById('deleted_participants');
+                if (pid && pid !== "0") {
+                    let ids = deletedInput.value ? deletedInput.value.split(',') : [];
+                    ids.push(pid);
+                    deletedInput.value = ids.join(',');
+                }
+                row.remove();
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Peserta dihapus!',
+                    text: 'Data peserta berhasil dihapus dari form.',
+                    timer: 1200,
+                    showConfirmButton: false
+                });
+            }
+        });
+    }
+});
+document.querySelector('form').addEventListener('submit', () => {
+  Swal.fire({
+    title: 'Menyimpan...',
+    text: 'Tunggu sebentar, data sedang diperbarui.',
+    allowOutsideClick: false,
+    didOpen: () => {
+      Swal.showLoading();
+    }
+  });
+});
+
+</script>
+<?php if (isset($_GET['success'])): ?>
+<script>
+Swal.fire({
+    icon: 'success',
+    title: 'Berhasil!',
+    text: 'Data URL dan peserta berhasil diperbarui 🎉',
+    timer: 2000,
+    showConfirmButton: false
+});
+</script>
+<?php elseif (isset($_GET['error'])): ?>
+<script>
+Swal.fire({
+    icon: 'error',
+    title: 'Gagal!',
+    text: 'Terjadi kesalahan saat memperbarui data 😢',
+});
+</script>
+<?php endif; ?>
+
 </body>
 </html>
+
