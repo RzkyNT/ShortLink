@@ -189,11 +189,6 @@ tr:hover {
     background: rgba(255,255,255,0.04);
 }
 
-/* Chart */
-.chart-container {
-    height: 300px;
-}
-
 /* Fade In Animation */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
@@ -246,6 +241,19 @@ tr:hover {
         <div class="card">
             <div class="section-title"><i class="fas fa-chart-bar"></i> Clicks in Last 30 Days</div>
             <div class="chart-container">
+                <div class="filter-bar" style="margin-bottom:20px; display:flex; align-items:center; gap:10px;">
+                    <label for="timeFilter" style="font-size:14px;color:#aaa;">Filter:</label>
+                    <select id="timeFilter" style="padding:8px 12px; border-radius:8px; background:#1a1c23; color:#fff; border:1px solid rgba(255,255,255,0.1);">
+                        <option value="7">Last 7 Days</option>
+                        <option value="30" selected>Last 30 Days</option>
+                        <option value="all">All Time</option>
+                        <option value="month">This Month</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <input type="date" id="startDate" style="display:none; padding:6px 10px; border-radius:8px; background:#1a1c23; color:#fff; border:1px solid rgba(255,255,255,0.1);" />
+                    <input type="date" id="endDate" style="display:none; padding:6px 10px; border-radius:8px; background:#1a1c23; color:#fff; border:1px solid rgba(255,255,255,0.1);" />
+                    <button id="applyCustom" style="display:none; padding:8px 14px; background:#667eea; border:none; border-radius:8px; color:white; cursor:pointer;">Apply</button>
+                </div>
                 <canvas id="clickChart"></canvas>
             </div>
         </div>
@@ -283,8 +291,11 @@ tr:hover {
         </div>
     </div>
 
-<script>
+    <script>
 const ctx = document.getElementById('clickChart');
+let clickChart;
+
+// --- Data awal dari PHP ---
 const chartData = {
     labels: [<?php
         $dates = []; $clicks = [];
@@ -294,29 +305,74 @@ const chartData = {
         }
         echo implode(',', $dates);
     ?>],
-    datasets: [{
-        label: 'Clicks',
-        data: [<?= implode(',', $clicks) ?>],
-        backgroundColor: 'rgba(102,126,234,0.3)',
-        borderColor: '#667eea',
-        borderWidth: 2,
-        fill: true,
-        tension: 0.4,
-        pointRadius: 4,
-        pointHoverRadius: 6
-    }]
+    clicks: [<?= implode(',', $clicks) ?>]
 };
-new Chart(ctx, {
-    type: 'line',
-    data: chartData,
-    options: {
-        plugins: { legend: { display: false } },
-        scales: {
-            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#aaa' } },
-            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#aaa' } }
+
+// --- Fungsi render chart ---
+function renderChart(labels, data) {
+    if (clickChart) clickChart.destroy();
+    clickChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Clicks',
+                data: data,
+                backgroundColor: 'rgba(102,126,234,0.3)',
+                borderColor: '#667eea',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#aaa' } },
+                x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#aaa' } }
+            }
         }
+    });
+}
+
+// --- Render awal ---
+renderChart(chartData.labels, chartData.clicks);
+
+// --- Filter control ---
+const filterSelect = document.getElementById('timeFilter');
+const startDate = document.getElementById('startDate');
+const endDate = document.getElementById('endDate');
+const applyBtn = document.getElementById('applyCustom');
+
+filterSelect.addEventListener('change', () => {
+    const val = filterSelect.value;
+    if (val === 'custom') {
+        startDate.style.display = endDate.style.display = applyBtn.style.display = 'inline-block';
+    } else {
+        startDate.style.display = endDate.style.display = applyBtn.style.display = 'none';
+        loadChartData(val);
     }
 });
+
+applyBtn.addEventListener('click', () => {
+    if (!startDate.value || !endDate.value) return alert('Please select both start and end date');
+    loadChartData('custom', startDate.value, endDate.value);
+});
+
+// --- Ambil data dari PHP (AJAX) ---
+function loadChartData(filter, start = '', end = '') {
+    fetch(`analytics_data.php?id=<?= $url_id ?>&filter=${filter}&start=${start}&end=${end}`)
+        .then(res => res.json())
+        .then(data => {
+            renderChart(data.dates, data.clicks);
+            document.querySelectorAll('.stat-card .number')[0].textContent = data.total_clicks;
+            document.querySelectorAll('.stat-card .number')[1].textContent = data.unique_visitors;
+        })
+        .catch(err => console.error(err));
+}
 </script>
+
 </body>
 </html>
