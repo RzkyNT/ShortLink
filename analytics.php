@@ -220,6 +220,15 @@ html, body {
   touch-action: manipulation;
 }
 
+a {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-all;
+  white-space: normal;
+  display: inline-block;
+  max-width: 100%;
+}
+
 </style>
 </head>
 <body>

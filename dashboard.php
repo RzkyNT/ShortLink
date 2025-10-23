@@ -401,7 +401,7 @@ html, body {
                                 </a>
 
                             </td>
-                            <td data-label="Original URL" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <td data-label="Original URL" style="max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                 <?= htmlspecialchars($row['original_url']) ?>
                             </td>
                             <td data-label="Title"><?= htmlspecialchars($row['title'] ?? '-') ?></td>
