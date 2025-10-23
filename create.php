@@ -569,9 +569,9 @@ input[type="datetime-local"]:not([value]):valid::-webkit-datetime-edit-minute-fi
                 <label>Participants</label>
                 <div id="participants-container">
                     <div class="participant-row">
-                        <input type="text" name="participants[0][name]" placeholder="Nama Peserta" required>
-                        <input type="text" name="participants[0][code]" placeholder="Kode Unik" required>
-                        <input type="url" name="participants[0][target_url]" placeholder="URL Tujuan" required>
+                        <input type="text" name="participants[0][name]" placeholder="Nama Peserta">
+                        <input type="text" name="participants[0][code]" placeholder="Kode Unik">
+                        <input type="url" name="participants[0][target_url]" placeholder="URL Tujuan">
                     </div>
                 </div>
                 <button type="button" id="addParticipantBtn" class="btn">+ Tambah Peserta</button>
