@@ -6,14 +6,6 @@ URL Shortener berbasis PHP native dengan landing page profesional bergaya SaaS. 
 
 ## 🚀 Fitur
 
-
-
-
-
-
-
-
-
 ### Untuk Semua User (Tanpa Login):
 - ✅ Membuat short URL langsung dari landing page
 - ✅ Auto-generated short code (6 karakter)

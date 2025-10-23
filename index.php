@@ -121,7 +121,7 @@ $conn->close();
     .hero {
         padding: 100px 20px;
         text-align: center;
-        background: radial-gradient(circle at top,#1a1c25 0%,#0f1116 100%);
+        height:90vh;
     }
     .hero h1 {
         font-size: 48px;
@@ -205,7 +205,8 @@ $conn->close();
     /* FEATURES */
     .features {
         padding: 100px 20px;
-        background: #0f1116;
+        background: rgba(15,17,22,0.9);
+        backdrop-filter:blur(10px);
     }
     .section-title {
         text-align: center; font-size: 36px;
@@ -226,6 +227,7 @@ $conn->close();
     }
     .feature-card:hover {
         transform: translateY(-8px);
+        background:#0f1116;
         box-shadow: 0 0 25px rgba(122,90,248,0.2);
     }
     .feature-icon {
@@ -244,8 +246,9 @@ $conn->close();
 
     /* STATS */
     .stats {
-        padding: 80px 20px;
-        background: linear-gradient(135deg,#7a5af8,#4c28f2);
+        padding: 10vh 20px;
+        background:radial-gradient(circle at bottom, rgba(26, 28, 37, 1) 0%, rgba(67, 113, 228, 0.8) 100%);
+        backdrop-filter:blur(10px);
         text-align: center; color: white;
     }
     .stats-grid {
@@ -259,8 +262,8 @@ $conn->close();
     /* CTA */
     .cta {
         padding: 100px 20px;
-        text-align: center;
-        background: #0f1116;
+        text-align: center;        
+        background:radial-gradient(circle at top, rgba(26, 28, 37, 1) 0%, rgba(67, 113, 228, 0.8) 100%)
     }
     .cta h2 {
         font-size: 36px;
@@ -282,7 +285,7 @@ $conn->close();
         text-decoration: none; transition: .3s;
     }
     .btn-primary {
-        background: linear-gradient(135deg,#7a5af8,#4c28f2);
+        background: #7a5af8;
         color: white;
     }
     .btn-secondary {
@@ -301,8 +304,6 @@ $conn->close();
         padding: 40px 0;
         font-size: 14px;
     }
-
-    
     /* 🔒 Nonaktifkan seleksi teks di seluruh halaman */
 body {
   -webkit-user-select: none;  /* Safari/Chrome */
@@ -331,7 +332,9 @@ html, body {
 </style>
 </head>
 <body>
+  <div id="vanta-bg"></div> <!-- Background Awan -->
 
+  <div class="content">
 <nav>
     <div class="nav-container">
         <div class="logo"><i class="fa-solid fa-link"></i> URL Shortener</div>
@@ -426,37 +429,46 @@ html, body {
 </section>
 
 <section class="stats" id="stats">
-    <h2 class="section-title">Our Impact</h2>
-    <div class="stats-grid">
-        <div class="stat-item">
-            <h2><?= number_format($stats['total_urls']) ?>+</h2>
-            <p>URLs Shortened</p>
-        </div>
-        <div class="stat-item">
-            <h2><?= number_format($stats['total_clicks']) ?>+</h2>
-            <p>Total Clicks</p>
-        </div>
-        <div class="stat-item">
-            <h2><?= number_format($stats['protected_links']) ?>+</h2>
-            <p>Password-Protected Links</p>
-        </div>
-        <div class="stat-item">
-            <h2><?= number_format($stats['one_time_links']) ?>+</h2>
-            <p>One-Time Use Links</p>
-        </div>
-        <div class="stat-item">
-            <h2><?= number_format($stats['expired_links']) ?>+</h2>
-            <p>Expired Links</p>
-        </div>
-        <!-- <div class="stat-item">
-            <h2><?= number_format($stats['active_users']) ?>+</h2>
-            <p>Active Users</p>
-        </div> -->
-        <div class="stat-item">
-            <h2>99.9%</h2>
-            <p>Uptime</p>
-        </div>
+  <h2 class="section-title">Our Impact</h2>
+  <div class="stats-grid">
+    
+    <div class="stat-item">
+      <i class="fa-solid fa-link fa-2x"></i>
+      <h2><?= number_format($stats['total_urls']) ?>+</h2>
+      <p>URLs Shortened</p>
     </div>
+
+    <div class="stat-item">
+      <i class="fa-solid fa-mouse-pointer fa-2x"></i>
+      <h2><?= number_format($stats['total_clicks']) ?>+</h2>
+      <p>Total Clicks</p>
+    </div>
+
+    <div class="stat-item">
+      <i class="fa-solid fa-lock fa-2x"></i>
+      <h2><?= number_format($stats['protected_links']) ?>+</h2>
+      <p>Password-Protected Links</p>
+    </div>
+
+    <div class="stat-item">
+      <i class="fa-solid fa-user-clock fa-2x"></i>
+      <h2><?= number_format($stats['one_time_links']) ?>+</h2>
+      <p>One-Time Use Links</p>
+    </div>
+
+    <div class="stat-item">
+      <i class="fa-solid fa-hourglass-end fa-2x"></i>
+      <h2><?= number_format($stats['expired_links']) ?>+</h2>
+      <p>Expired Links</p>
+    </div>
+
+    <div class="stat-item">
+      <i class="fa-solid fa-server fa-2x"></i>
+      <h2>99.9%</h2>
+      <p>Uptime</p>
+    </div>
+    
+  </div>
 </section>
 
 
@@ -465,7 +477,7 @@ html, body {
     <h2>Track, Shorten & Optimize Your Links</h2>
     <p>Sign up today to get real-time analytics, track every click, and maximize your link performance.</p>
     <div class="cta-buttons">
-      <a href="login.php" class="btn btn-primary" style="color:white">
+      <a href="login.php" class="btn btn-primary" style="color:#0a0c10">
         <i class="fa-solid fa-user" aria-hidden="true"></i> Access Dashboard
       </a>
       <a href="#hero" class="btn btn-secondary" id="create-link-btn">
@@ -479,7 +491,6 @@ html, body {
 .cta {
   padding: 80px 20px;
   text-align: center;
-  background: linear-gradient(135deg, #6a11cb, #2575fc);
   color: #fff;
   border-radius: 12px;
   margin: 40px auto;
@@ -535,6 +546,20 @@ html, body {
     font-size: 1rem;
   }
 }
+    #vanta-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1; /* supaya di belakang konten */
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+}
+
 </style>
 
 <script>
@@ -562,6 +587,24 @@ function copyUrl() {
         setTimeout(() => { btn.innerHTML = original; btn.style.background = '#28a745'; }, 2000);
     });
 }
+</script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.clouds.min.js"></script>
+
+<script>
+VANTA.CLOUDS({
+  el: "#vanta-bg",   // ✅ pakai id background tadi
+  mouseControls: true,
+  touchControls: true,
+  gyroControls: false,
+  minHeight: 200.00,
+  minWidth: 200.00,
+  skyColor: 0x0,
+  sunColor: 0x2218ff,
+  sunGlareColor: 0x307cff,
+  sunlightColor: 0x30ff8c,
+  speed: 0.80
+})
 </script>
 
 </body>
