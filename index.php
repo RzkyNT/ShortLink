@@ -130,7 +130,7 @@ $conn->close();
         margin-bottom: 15px;
     }
     .hero p {
-        color: #bbb;
+        color: rgba(67, 113, 228, 0.8);
         font-size: 18px;
         max-width: 650px;
         margin: 0 auto 40px;
