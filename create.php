@@ -489,6 +489,32 @@ input[type="datetime-local"]:not([value]):valid::-webkit-datetime-edit-minute-fi
     transition: all 0.3s ease;
 }
 
+
+    /* 🔒 Nonaktifkan seleksi teks di seluruh halaman */
+body {
+  -webkit-user-select: none;  /* Safari/Chrome */
+  -moz-user-select: none;     /* Firefox */
+  -ms-user-select: none;      /* IE/Edge lama */
+  user-select: none;          /* Standar */
+  -webkit-tap-highlight-color: transparent; /* Hilangkan highlight saat tap di mobile */
+}
+
+/* ✅ Izinkan seleksi & interaksi normal di elemen form */
+input,
+textarea,
+select,
+button,
+[contenteditable] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  -webkit-tap-highlight-color: inherit;
+}
+html, body {
+  touch-action: manipulation;
+}
+
     </style>
 </head>
 <body>
