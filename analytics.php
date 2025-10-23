@@ -1,4 +1,5 @@
 <?php
+
 session_start();
 require_once 'config/database.php';
 
@@ -11,6 +12,35 @@ $url_id = $_GET['id'] ?? 0;
 $conn = getDBConnection();
 $user_id = $_SESSION['user_id'];
 
+/* =====================================================
+   🔧 AUTO ALTER TABLE url_clicks (add new columns if missing)
+===================================================== */
+$expectedCols = [
+    'region' => "VARCHAR(100) NULL DEFAULT NULL AFTER `city`",
+    'postal' => "VARCHAR(30) NULL DEFAULT NULL AFTER `region`",
+    'timezone' => "VARCHAR(100) NULL DEFAULT NULL AFTER `postal`",
+    'device_type' => "VARCHAR(50) NULL DEFAULT NULL AFTER `timezone`",
+    'browser' => "VARCHAR(50) NULL DEFAULT NULL AFTER `device_type`",
+    'os' => "VARCHAR(50) NULL DEFAULT NULL AFTER `browser`",
+    'org' => "VARCHAR(150) NULL DEFAULT NULL AFTER `os`",
+    'asn' => "VARCHAR(100) NULL DEFAULT NULL AFTER `org`",
+    'latitude' => "VARCHAR(50) NULL DEFAULT NULL AFTER `asn`",
+    'longitude' => "VARCHAR(50) NULL DEFAULT NULL AFTER `latitude`"
+];
+
+$existingCols = [];
+$res = $conn->query("SHOW COLUMNS FROM url_clicks");
+while ($r = $res->fetch_assoc()) $existingCols[] = $r['Field'];
+
+foreach ($expectedCols as $col => $definition) {
+    if (!in_array($col, $existingCols)) {
+        $conn->query("ALTER TABLE url_clicks ADD COLUMN `$col` $definition");
+    }
+}
+
+/* =====================================================
+   📦 LOAD URL & ANALYTICS DATA
+===================================================== */
 $stmt = $conn->prepare("SELECT * FROM urls WHERE id = ? AND user_id = ?");
 $stmt->bind_param("ii", $url_id, $user_id);
 $stmt->execute();
@@ -38,7 +68,7 @@ $clicks_data = $conn->query("
 $recent_clicks = $conn->query("
     SELECT * FROM url_clicks 
     WHERE url_id = $url_id 
-    ORDER BY clicked_at DESC LIMIT 10
+    ORDER BY clicked_at DESC LIMIT 15
 ");
 
 $top_ref = $conn->query("
@@ -307,18 +337,43 @@ a {
             <?php endif; ?>
         </div>
 
-        <div class="card">
-            <div class="section-title"><i class="fas fa-clock"></i> Recent Clicks</div>
-            <?php if ($recent_clicks->num_rows > 0): ?>
-            <table>
-                <tr><th>Date</th><th>IP</th><th>Referrer</th></tr>
-                <?php while ($c = $recent_clicks->fetch_assoc()): ?>
-                    <tr>
-                        <td><?= $c['clicked_at'] ?></td>
-                        <td><?= htmlspecialchars($c['ip_address']) ?></td>
-                        <td><?= $c['referer'] ? htmlspecialchars($c['referer']) : 'Direct' ?></td>
-                    </tr>
-                <?php endwhile; ?>
+            <div class="card">
+        <div class="section-title"><i class="fas fa-clock"></i> Recent Clicks (Detailed)</div>
+        <?php if ($recent_clicks->num_rows > 0): ?>
+        <div style="overflow-x:auto;">
+        <table>
+            <tr>
+                <th>Date</th>
+                <th>IP</th>
+                <th>Region</th>
+                <th>Postal</th>
+                <th>Timezone</th>
+                <th>Device</th>
+                <th>Browser</th>
+                <th>OS</th>
+                <th>Org</th>
+                <th>ASN</th>
+                <th>Lat</th>
+                <th>Lon</th>
+                <th>Referrer</th>
+            </tr>
+            <?php while ($c = $recent_clicks->fetch_assoc()): ?>
+                <tr>
+                    <td><?= htmlspecialchars($c['clicked_at']) ?></td>
+                    <td><?= htmlspecialchars($c['ip_address']) ?></td>
+                    <td><?= htmlspecialchars($c['region'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($c['postal'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($c['timezone'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($c['device_type'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($c['browser'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($c['os'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($c['org'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($c['asn'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($c['latitude'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($c['longitude'] ?? '-') ?></td>
+                    <td><?= $c['referer'] ? htmlspecialchars($c['referer']) : 'Direct' ?></td>
+                </tr>
+            <?php endwhile; ?>
             </table>
             <?php else: ?>
                 <p style="color:#aaa;">No clicks recorded yet.</p>

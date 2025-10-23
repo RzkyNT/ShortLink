@@ -312,8 +312,7 @@ $stats = $stats_result->fetch_assoc();
     .copy-btn:hover {
         background: #218838;
     }
-
-    
+        
     /* 🔒 Nonaktifkan seleksi teks di seluruh halaman */
 body {
   -webkit-user-select: none;  /* Safari/Chrome */
@@ -339,6 +338,19 @@ html, body {
   touch-action: manipulation;
 }
 
+
+@media (max-width: 768px) {
+  td[data-label="Original URL"] {
+    max-width: 100% !important;
+  }
+}
+
+td[data-label="Original URL"] {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
     </style>
 </head>
 <body>
@@ -401,7 +413,7 @@ html, body {
                                 </a>
 
                             </td>
-                            <td data-label="Original URL" style="max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <td data-label="Original URL" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                 <?= htmlspecialchars($row['original_url']) ?>
                             </td>
                             <td data-label="Title"><?= htmlspecialchars($row['title'] ?? '-') ?></td>

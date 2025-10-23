@@ -117,14 +117,123 @@ $title = $url_data['title'];
 $host = parse_url($target_url, PHP_URL_HOST);
 $qr_base64 = $url_data['qr_base64'] ?? '';
 
+// ==================================================
+// 🧠 LOGGING DEVICE, OS, LOKASI, BROWSER, ASN, DLL
+// ==================================================
 if ($can_access) {
-    // catat klik
     $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    if ($ip_address === '127.0.0.1' || $ip_address === '::1') {
+        $ip_address = '101.255.140.157'; // fallback IP utk testing localhost
+    }
+
     $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
     $referer = $_SERVER['HTTP_REFERER'] ?? '';
+    $timestamp = date('Y-m-d H:i:s');
 
-    $stmt = $conn->prepare("INSERT INTO url_clicks (url_id, ip_address, user_agent, referer) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("isss", $url_data['id'], $ip_address, $user_agent, $referer);
+    // === DETEKSI DEVICE & OS ===
+    function detectDevice($ua) {
+        $ua = strtolower($ua);
+        if (strpos($ua, 'mobile') !== false) return 'Mobile';
+        if (strpos($ua, 'tablet') !== false) return 'Tablet';
+        return 'Desktop';
+    }
+
+    function detectBrowser($ua) {
+        $ua = strtolower($ua);
+        if (strpos($ua, 'chrome') !== false && strpos($ua, 'edg') === false) return 'Chrome';
+        if (strpos($ua, 'firefox') !== false) return 'Firefox';
+        if (strpos($ua, 'safari') !== false && strpos($ua, 'chrome') === false) return 'Safari';
+        if (strpos($ua, 'edg') !== false) return 'Edge';
+        if (strpos($ua, 'opr') !== false || strpos($ua, 'opera') !== false) return 'Opera';
+        return 'Other';
+    }
+
+    function detectOS($ua) {
+        $ua = strtolower($ua);
+        if (strpos($ua, 'windows') !== false) return 'Windows';
+        if (strpos($ua, 'mac') !== false) return 'MacOS';
+        if (strpos($ua, 'android') !== false) return 'Android';
+        if (strpos($ua, 'linux') !== false) return 'Linux';
+        if (strpos($ua, 'iphone') !== false || strpos($ua, 'ipad') !== false) return 'iOS';
+        return 'Other';
+    }
+
+    $device_type = detectDevice($user_agent);
+    $browser = detectBrowser($user_agent);
+    $os = detectOS($user_agent);
+
+    // === AMBIL DATA GEOLOKASI ===
+    $location = [
+        'country' => '',
+        'city' => '',
+        'region' => '',
+        'postal' => '',
+        'org' => '',
+        'asn' => '',
+        'timezone' => '',
+        'lat' => '',
+        'lon' => ''
+    ];
+
+    // Gunakan ipwho.is untuk hasil lebih lengkap
+$api_url = "https://ipwho.is/{$ip_address}";
+$context = stream_context_create(['http' => ['timeout' => 3]]);
+$response = @file_get_contents($api_url, false, $context);
+
+if ($response !== false) {
+    $data = json_decode($response, true);
+    if (!empty($data) && $data['success'] === true) {
+        $location['country'] = $data['country'] ?? '';
+        $location['region']  = $data['region'] ?? '';
+        $location['city']    = $data['city'] ?? '';
+        $location['postal']  = $data['postal'] ?? '';
+        $location['org']     = $data['connection']['org'] ?? ($data['connection']['isp'] ?? '');
+        $location['asn']     = $data['connection']['asn'] ?? '';
+        $location['timezone'] = $data['timezone']['id'] ?? '';
+        $location['lat']     = $data['latitude'] ?? '';
+        $location['lon']     = $data['longitude'] ?? '';
+    }
+} else {
+    // fallback ke ipinfo.io bila gagal
+    $backup = @file_get_contents("https://ipinfo.io/{$ip_address}/json");
+    if ($backup !== false) {
+        $info = json_decode($backup, true);
+        if (!empty($info)) {
+            $location['country'] = $info['country'] ?? '';
+            $location['city'] = $info['city'] ?? '';
+            $location['org'] = $info['org'] ?? '';
+            if (!empty($info['loc'])) {
+                list($location['lat'], $location['lon']) = explode(',', $info['loc']);
+            }
+        }
+    }
+}
+
+
+    // === SIMPAN KE DATABASE ===
+    $stmt = $conn->prepare("INSERT INTO url_clicks 
+        (url_id, ip_address, user_agent, referer, device_type, browser, os, country, city, region, postal, org, asn, timezone, latitude, longitude, clicked_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param(
+        "issssssssssssssss",
+        $url_data['id'],
+        $ip_address,
+        $user_agent,
+        $referer,
+        $device_type,
+        $browser,
+        $os,
+        $location['country'],
+        $location['city'],
+        $location['region'],
+        $location['postal'],
+        $location['org'],
+        $location['asn'],
+        $location['timezone'],
+        $location['lat'],
+        $location['lon'],
+        $timestamp
+    );
     $stmt->execute();
     $stmt->close();
 
@@ -192,7 +301,7 @@ button:hover,.btn:hover{background:#5568d3;}
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        
+    
     /* 🔒 Nonaktifkan seleksi teks di seluruh halaman */
 body {
   -webkit-user-select: none;  /* Safari/Chrome */
@@ -216,6 +325,26 @@ button,
 }
 html, body {
   touch-action: manipulation;
+}
+
+    .box {
+  animation: fadeIn 0.4s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+    @media (max-width: 480px) {
+  .box {
+    padding: 24px;
+  }
+  h1, h2 {
+    font-size: 1.3em;
+  }
+  input, button {
+    width: 100%;
+  }
 }
 
 </style>
@@ -254,9 +383,10 @@ html, body {
     <?php endif; ?>
 </div>
 
-    <footer class="branding">
-        🔗 Shortened with <a href="<?= BASE_URL ?? 'index.php' ?>">URL Shortener <p style="color:white">By Rzkt.NT</p></a>
-    </footer>
+   <footer class="branding">
+    🔗 Shortened with <a href="<?= BASE_URL ?? 'index.php' ?>">URL Shortener</a>
+    <span style="color:white;"> by Rzky.NT</span>
+</footer>
 </body>
 </html>
 
