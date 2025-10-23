@@ -265,6 +265,9 @@ function notFound($msg = "Short URL not found or inactive.") {
             justify-content: center;
             height: 100vh;
             margin: 0;
+            
+  -webkit-user-select: none;
+  user-select: none;
         }
         .box {
             text-align: center;
@@ -308,6 +311,12 @@ a:hover {
             to { opacity: 1; transform: translateY(0); }
         }
             
+input, textarea, select, button, [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+html, body { touch-action: manipulation; }
+
     </style></head><body>
     <div class='box'>
     <h1>
@@ -478,10 +487,10 @@ button:hover, .btn:hover {
         <img src="<?= $qr_base64 ?>" width="130" height="130" style="border-radius:8px; cursor:pointer; box-shadow:0 0 12px rgba(102,126,234,0.3);">
       </a>
       <p style="font-size:12px;color:#888;">Klik QR untuk download</p>
-      <a href="<?= htmlspecialchars($target_url) ?>" class="btn">Lanjutkan ke URL</a>
     </div>
-  <?php endif; ?>
-<?php endif; ?>
+    <?php endif; ?>
+    <?php endif; ?>
+    <a href="<?= htmlspecialchars($target_url) ?>" class="btn">Lanjutkan ke URL</a>
 </div>
 
 <footer class="branding">
