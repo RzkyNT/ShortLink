@@ -268,7 +268,6 @@ function notFound($msg = "Short URL not found or inactive.") {
         }
         .box {
             text-align: center;
-            background: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
             border-radius: 20px;
             padding: 60px 40px;
@@ -288,18 +287,22 @@ function notFound($msg = "Short URL not found or inactive.") {
             margin-bottom: 25px;
         }
         a {
-            background: linear-gradient(135deg, #667eea, #4461e2ff);
-            color: #fff;
-            padding: 12px 24px;
-            border-radius: 10px;
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        a:hover {
-            background: linear-gradient(135deg, #5568d3, #2e4ed8ff);
-            box-shadow: 0 0 12px rgba(102,126,234,0.6);
-        }
+  background: linear-gradient(135deg, #ff2020, #e35151);
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: inline-block;
+}
+
+a:hover {
+  background: linear-gradient(135deg, #e51b1b, #c94040);
+  box-shadow: 0 0 12px rgba(255, 32, 32, 0.6);
+  transform: translateY(-2px);
+}
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -312,6 +315,24 @@ function notFound($msg = "Short URL not found or inactive.") {
         <p>$msg</p>
         <a href='index.php'>Back to Home</a>
     </div>
+    <!-- Tambahkan sebelum penutup body -->
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.dots.min.js'></script>
+    <script>
+    VANTA.DOTS({
+      el: 'body',             // Terapkan ke body
+        mouseControls: true,
+  touchControls: true,
+  gyroControls: false,
+  minHeight: 200.00,
+  minWidth: 200.00,
+  scale: 1.00,
+  scaleMobile: 1.00,
+  color: 0xff2020,
+  color2: 0xe35151,
+  backgroundColor: 0x0
+    });
+    </script>
     </body></html>";
     exit;
 }
@@ -346,7 +367,6 @@ input, textarea, select, button, [contenteditable] {
 html, body { touch-action: manipulation; }
 
 .box {
-  background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
   padding: 40px;
   border-radius: 20px;
@@ -354,7 +374,7 @@ html, body { touch-action: manipulation; }
   width: 90%;
   max-width: 420px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(10px);
   animation: fadeIn 0.6s ease;
 }
 h1, h2 {
@@ -468,6 +488,25 @@ button:hover, .btn:hover {
   🔗 Shortened with <a href="<?= BASE_URL ?? 'index.php' ?>">URL Shortener</a>
   <span style="color:#aaa;"> by <strong style="color:#fff;">Rzky.NT</strong></span>
 </footer>
+    <!-- Tambahkan sebelum penutup body -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.dots.min.js"></script>
+<script>
+VANTA.DOTS({
+  el: "body",             // Terapkan ke body
+  mouseControls: true,
+  touchControls: true,
+  gyroControls: false,
+  minHeight: 200.00,
+  minWidth: 200.00,
+  scale: 1.00,
+  scaleMobile: 1.00,
+  color: 0x207fff,
+  color2: 0x515ce3,
+  backgroundColor: 0x0
+});
+</script>
+
 </body>
 </html>
 
