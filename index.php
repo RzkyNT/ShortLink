@@ -130,7 +130,7 @@ $conn->close();
         margin-bottom: 15px;
     }
     .hero p {
-        color: rgba(67, 113, 228, 0.8);
+        color: #7a5af8;
         font-size: 18px;
         max-width: 650px;
         margin: 0 auto 40px;
@@ -184,6 +184,7 @@ $conn->close();
         padding: 25px;
         text-align: center;
         color: #fff;
+        max-height:200px;
     }
     .short-url-display {
         background: #0f1116;
@@ -207,6 +208,7 @@ $conn->close();
         padding: 100px 20px;
         background: rgba(15,17,22,0.9);
         backdrop-filter:blur(10px);
+        margin-top:50px;
     }
     .section-title {
         text-align: center; font-size: 36px;
@@ -250,6 +252,7 @@ $conn->close();
         background:radial-gradient(circle at bottom, rgba(26, 28, 37, 1) 0%, rgba(67, 113, 228, 0.8) 100%);
         backdrop-filter:blur(10px);
         text-align: center; color: white;
+        margin-top:50px;
     }
     .stats-grid {
         display: grid;
@@ -361,8 +364,10 @@ html, body {
         <?php if ($success_url): ?>
             <div class="result-box">
                 <h3><i class="fa-solid fa-check-circle"></i> Short URL Created!</h3>
-                <div class="short-url-display" id="shortUrl"><?= htmlspecialchars($success_url) ?></div>
-                <button class="copy-btn" onclick="copyUrl()"><i class="fa-solid fa-copy"></i> Copy</button>
+                <div class="short-url-container">
+                    <input type="text" class="short-url-display" id="shortUrl" readonly value="<?= htmlspecialchars($success_url) ?>">
+                    <button class="copy-btn" onclick="copyUrl()"><i class="fa-solid fa-copy"></i></button>
+                </div>
                 <p style="margin-top:15px;color:#999;font-size:14px;">
                     <a href="login.php" style="color:#7a5af8;">Login</a> to manage your URLs
                 </p>
@@ -488,6 +493,41 @@ html, body {
 </section>
 
 <style>
+    .short-url-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.short-url-display {
+    flex: 1;
+    background: #1a1c25;
+    color: #fff;
+    border: 2px solid #4c28f2;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 15px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.copy-btn {
+    background: linear-gradient(135deg, #7a5af8, #4c28f2);
+    border: none;
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.copy-btn:hover {
+    transform: translateY(-2px);
+    opacity: 0.9;
+}
+
 .cta {
   padding: 80px 20px;
   text-align: center;
