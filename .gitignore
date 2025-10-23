@@ -1,0 +1,2 @@
+# Abaikan file konfigurasi database
+config/database.php
