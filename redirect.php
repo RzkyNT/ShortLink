@@ -107,13 +107,27 @@ $can_access = (!$requires_password && !$requires_code)
            || ($requires_password && $password_valid)
            || ($requires_code && $code_valid);
 
-// === PILIH TARGET URL ===
-if ($requires_code && isset($code_data['target_url'])) {
+// === PILIH TARGET URL ===// === PILIH TARGET URL UNIVERSAL ===
+if ($requires_code && !empty($code_data['target_url'])) {
+    // Mode per_code → gunakan URL spesifik peserta
     $target_url = $code_data['target_url'];
 } else {
-    $target_url = $url_data['original_url'];
+    // Mode public atau multi-link
+    $decoded = json_decode($url_data['original_url'], true);
+
+    if (is_array($decoded) && !empty($decoded)) {
+        // Jika array JSON (multi link)
+        $target_url = $decoded[0]['url'] ?? '#';
+    } elseif (filter_var($url_data['original_url'], FILTER_VALIDATE_URL)) {
+        // Jika field berisi satu URL biasa
+        $target_url = $url_data['original_url'];
+    } else {
+        // Fallback terakhir (tidak valid)
+        $target_url = 'Hubungi Admin';
+    }
 }
-$title = $url_data['title'];
+
+$main_title = $url_data['title'] ?? '';
 $host = parse_url($target_url, PHP_URL_HOST);
 $qr_base64 = $url_data['qr_base64'] ?? '';
 
@@ -332,7 +346,7 @@ html, body { touch-action: manipulation; }
       el: 'body',             // Terapkan ke body
         mouseControls: true,
   touchControls: true,
-  gyroControls: false,
+  gyroControls: true,
   minHeight: 200.00,
   minWidth: 200.00,
   scale: 1.00,
@@ -346,12 +360,22 @@ html, body { touch-action: manipulation; }
     exit;
 }
 ?>
+<?php
+  // Decode JSON array selalu
+  $urls = json_decode($url_data['original_url'] ?? '[]', true);
+  $urls = is_array($urls) ? $urls : [];
+  $count = count($urls);
+  $is_multi = $count > 1;
+  $single_target = $urls[0]['url'] ?? '#';
+  $single_title = $urls[0]['title'] ?? $single_target;
+  $host_name = parse_url($single_target, PHP_URL_HOST) ?? "Link";
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Go to <?= htmlspecialchars($host ?? 'Destination') ?></title>
+<title><?= htmlspecialchars($main_title ?? 'Go to ' . $host) ?></title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css">
@@ -368,6 +392,8 @@ body {
   margin: 0;
   -webkit-user-select: none;
   user-select: none;
+    overflow-x: hidden;  /* hilangkan scroll horizontal */
+    overflow-y: hidden;
 }
 input, textarea, select, button, [contenteditable] {
   -webkit-user-select: text;
@@ -416,6 +442,7 @@ button, .btn {
   text-decoration: none;
   display: inline-block;
   transition: all 0.3s ease;
+  width:60vh;
 }
 button:hover, .btn:hover {
   background: linear-gradient(135deg, #5568d3, #2e4ed8ff);
@@ -478,26 +505,87 @@ button:hover, .btn:hover {
       <button type="submit">Access</button>
     </form>
   <?php endif; ?>
+
 <?php else: ?>
-  <h1><i class="fas fa-external-link-alt"></i> Ready to visit</h1>
-  <p style="color:#a5b4fc;word-break:break-all;"><?= htmlspecialchars($host ?? $target_url) ?></p>
-  <?php if (!empty($qr_base64)): ?>
-    <div style="margin-top:25px;">
+<?php
+  // Decode JSON array selalu
+  $urls = json_decode($url_data['original_url'] ?? '[]', true);
+  $urls = is_array($urls) ? $urls : [];
+  $count = count($urls);
+  $is_multi = $count > 1;
+  $single_target = $urls[0]['url'] ?? $target_url;
+  $single_title = $urls[0]['title'] ?? 'Click here!';
+  $host_name = parse_url($single_target, PHP_URL_HOST) ?? "Link";
+?>
+  <h1><i class="fas fa-external-link-alt"></i>
+    <?= $is_multi ?  htmlspecialchars($main_title) :  htmlspecialchars($host ?? $target_url) ?>
+  </h1>
+  <p style="color:#a5b4fc;word-break:break-all;">
+    <?= $is_multi ? 'Choose to visit' : 'Ready to visit'?></p>
+  <?php if (!$is_multi && !empty($qr_base64)): ?>
+    <div id="qrModal" style="margin-top:25px;">
       <a href="<?= $qr_base64 ?>" download="Qr <?= preg_replace('/[^a-zA-Z0-9-_]/','_', $url_data['title'] ?? $short_code) ?>.png">
         <img src="<?= $qr_base64 ?>" width="130" height="130" style="border-radius:8px; cursor:pointer; box-shadow:0 0 12px rgba(102,126,234,0.3);">
       </a>
       <p style="font-size:12px;color:#888;">Klik QR untuk download</p>
     </div>
-    <?php endif; ?>
-    <?php endif; ?>
-    <a href="<?= htmlspecialchars($target_url) ?>" class="btn">Lanjutkan ke URL</a>
-</div>
+  <?php endif; ?>
+  <div class="result-container">
+<?php if ($is_multi): ?>
+    <div class="multi-links">
+        <?php foreach ($urls as $u): ?>
+            <div class="link-item" style="margin:10px 0;">
+                <a href="<?= htmlspecialchars($u['url']) ?>" class="btn" target="_blank">
+                    <?= htmlspecialchars($u['title'] ?: $u['url']) ?>
+                </a>
+            </div>
+        <?php endforeach; ?>
+    </div>
+<?php else: ?>
+    <p style="color:#a5b4fc; word-break:break-all;"><?= htmlspecialchars($single_target ?? $target_url) ?></p>
+    <a href="<?= htmlspecialchars($single_target ?? $target_url) ?>" class="btn"><?= htmlspecialchars($single_title ?? 'Click here!') ?></a>
+<?php endif; ?> <!-- <-- INI HARUS DITAMBAHKAN -->
+</div> <!-- result-container -->
+
 
 <footer class="branding">
   🔗 Shortened with <a href="<?= BASE_URL ?? 'index.php' ?>">URL Shortener</a>
   <span style="color:#aaa;"> by <strong style="color:#fff;">Rzky.NT</strong></span>
 </footer>
-    <!-- Tambahkan sebelum penutup body -->
+
+<!-- Modal QR untuk multi-link -->
+<div id="qrModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+background:rgba(0,0,0,0.7); justify-content:center; align-items:center;">
+  <div style="background:#111; padding:20px; border-radius:12px; text-align:center;">
+    <h3 id="qrTitle" style="color:#fff; margin-bottom:10px;"></h3>
+     <a id="qrImage" href="<?= $qr_base64 ?>" download="Qr <?= preg_replace('/[^a-zA-Z0-9-_]/','_', $url_data['title'] ?? $short_code) ?>.png">
+    <img id="qrImage" src="<?= $qr_base64 ?>" style="width:200px; height:200px; border-radius:12px;">
+    </a>
+    <p style="font-size:12px;color:#888;">Klik QR untuk download</p>
+    <button onclick="document.getElementById('qrModal').style.display='none';" 
+      style="margin-top:15px;padding:8px 16px;border:none;border-radius:8px;">Close</button>
+  </div>
+</div>
+
+<?php endif; ?>
+<script>
+window.addEventListener('DOMContentLoaded', () => {
+    <?php if ($is_multi && !empty($qr_base64)): ?>
+        // Tampilkan QR hanya untuk multi-link
+        showQR("<?= htmlspecialchars($main_title ?? 'QR Code') ?>", "<?= $qr_base64 ?>");
+    <?php endif; ?>
+});
+</script>
+
+<script>
+function showQR(title, qrBase64){
+  document.getElementById('qrTitle').innerText = title;
+  document.getElementById('qrImage').src = qrBase64;
+  document.getElementById('qrModal').style.display = 'flex';
+}
+</script>
+
+<!-- Tambahkan sebelum penutup body -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.dots.min.js"></script>
 <script>
@@ -505,7 +593,7 @@ VANTA.DOTS({
   el: "body",             // Terapkan ke body
   mouseControls: true,
   touchControls: true,
-  gyroControls: false,
+  gyroControls: true,
   minHeight: 200.00,
   minWidth: 200.00,
   scale: 1.00,
@@ -518,4 +606,3 @@ VANTA.DOTS({
 
 </body>
 </html>
-

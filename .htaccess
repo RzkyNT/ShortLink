@@ -1,21 +1,22 @@
 # Enable Rewrite Engine
 RewriteEngine On
-RewriteBase /
+RewriteBase /url_shortener/
 
 # Redirect to HTTPS (optional)
 # RewriteCond %{HTTPS} off
 # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 # Don't rewrite files and directories
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
 
-# Don't rewrite admin files
-RewriteCond %{REQUEST_URI} !^/(index|login|logout|dashboard|create|edit|delete|analytics|install|redirect)\.php
-RewriteCond %{REQUEST_URI} !^/config/
+# Jangan rewrite file admin & config
+RewriteCond %{REQUEST_URI} !^/url_shortener/(index|login|logout|dashboard|create|edit|delete|analytics|install|redirect)\.php
+RewriteCond %{REQUEST_URI} !^/url_shortener/config/
 
-# Rewrite all short codes and subpaths to redirect.php
-RewriteRule ^(.+)$ redirect.php?code=$1 [L,QSA]
+# Rewrite semua short codes ke redirect.php
+RewriteRule ^([^/]+)/?$ redirect.php?code=$1 [L,QSA]
 
 # Prevent directory listing
 Options -Indexes

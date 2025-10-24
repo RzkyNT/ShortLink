@@ -278,12 +278,30 @@ a {
             </a>
             </p>
 
-            <p><strong>Original:</strong> 
-                <a style="color: #667eea; text-decoration: none;" href="<?= htmlspecialchars($url_data['original_url']) ?>">
-                    <?= htmlspecialchars($url_data['original_url']) ?>
-                </a>
-            </p>
-        </div>
+           <p><strong>Original Url:</strong></p>
+            <div style="margin-top:6px;">
+                <?php
+                $original = $url_data['original_url'] ?? '';
+                $decoded = json_decode($original, true);
+
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    // Jika berisi array JSON (multi URL)
+                    foreach ($decoded as $item) {
+                        $title = htmlspecialchars($item['title'] ?? '(no title)');
+                        $url = htmlspecialchars($item['url'] ?? '#');
+                        echo "<div style='margin-bottom:4px;'>
+                                <strong>$title</strong> 
+                                <a href='$url' target='_blank' style='color:#667eea; text-decoration:none;'>→ $url</a>
+                            </div>";
+                    }
+                } else {
+                    // Jika bukan JSON array, tampilkan sebagai single URL
+                    $safe_url = htmlspecialchars($original);
+                    echo "<a href='$safe_url' target='_blank' style='color:#667eea; text-decoration:none;'>$safe_url</a>";
+                }
+                ?>
+            </div>
+
 
         <div class="stats-grid">
             <div class="stat-card">

@@ -17,38 +17,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ✅ 1. Set access mode dulu
     $access_mode = $_POST['access_mode'] ?? 'public';
     error_log("Mode: $access_mode, Participants: " . print_r($_POST['participants'] ?? [], true));
-    // Ambil input URL
-    $original_url = trim($_POST['original_url'] ?? '');
 
-    // Ambil title dan custom code sesuai mode
-    if ($access_mode === 'public') {
-        $title = trim($_POST['title_public'] ?? '');
-        $custom_code = trim($_POST['custom_code_public'] ?? '');
-        $one_time = isset($_POST['one_time_public']) ? 1 : 0;
-    } else { // per_code / individual
-        $title = trim($_POST['title_individual'] ?? '');
-        $custom_code = trim($_POST['custom_code_individual'] ?? '');
-        $one_time = isset($_POST['one_time_individual']) ? 1 : 0;
+    // ✅ 2. Ambil input URL & title
+    $original_url_input = $_POST['original_url'] ?? [];
+    $title_input = $_POST['title_public'] ?? [];
+    $main_title_input = trim($_POST['main_title'] ?? '');
+    // Pastikan array datar
+    if (is_array($original_url_input)) {
+        $original_url_input = array_map(fn($x) => is_array($x) ? implode('', $x) : $x, $original_url_input);
+    }
+    if (is_array($title_input)) {
+        $title_input = array_map(fn($x) => is_array($x) ? implode('', $x) : $x, $title_input);
+    }
 
-        // Jika original_url kosong, pakai placeholder
-        if (empty($original_url)) {
-            $original_url = 'INDIVIDUAL_LINK_MODE';
+    // ✅ 3. Buat daftar link
+    $links = [];
+    foreach ($original_url_input as $i => $url) {
+        $url = trim($url);
+        $title = trim($title_input[$i] ?? '');
+        if (!empty($url)) {
+            $links[] = [
+                'title' => $title ?: "Link " . ($i + 1),
+                'url'   => $url
+            ];
         }
     }
 
+    // ✅ 4. Validasi isi link
+    // ✅ 4. Validasi isi link
+if ($access_mode !== 'per_code') {
+    if (empty($links)) {
+        $error = 'Please enter at least one URL.';
+    } else {
+        foreach ($links as $l) {
+            if (!filter_var($l['url'], FILTER_VALIDATE_URL)) {
+                $error = "Please enter valid URLs only (invalid: {$l['url']})";
+                break;
+            }
+        }
+    }
+} else {
+    // Mode per_code tidak butuh original_url
+    $links = [];
+    $original_url = 'INDIVIDUAL_LINK_MODE';
+}
+
+
+    // ✅ 5. Kalau valid, ubah jadi JSON
+    if (empty($error)) {
+        $original_url = json_encode($links, JSON_UNESCAPED_SLASHES);
+        $is_multi = count($links) > 1;
+    }
+
+    // ✅ 6. Ambil input umum
     $access_password = trim($_POST['access_password'] ?? '');
     $expire_at = !empty($_POST['expire_at']) ? date('Y-m-d H:i:s', strtotime($_POST['expire_at'])) : null;
     $password_plain = !empty($access_password) ? $access_password : null;
+    // ✅ 7. Universal handling untuk title, custom code, dan one_time
+        $main_title_input = trim($_POST['main_title'] ?? '');
 
-    // Validasi dasar untuk mode publik
-    if ($access_mode === 'public') {
-        if (empty($original_url)) {
-            $error = 'Please enter a URL';
-        } elseif (!filter_var($original_url, FILTER_VALIDATE_URL)) {
-            $error = 'Please enter a valid URL';
+        $title = $main_title_input
+            ?: trim($_POST['title_public'][0] ?? ($_POST['title_individual'] ?? 'Untitled'));
+
+        $custom_code = trim(
+            $_POST['custom_code_public']
+            ?? $_POST['custom_code_individual']
+            ?? $_POST['custom_code']
+            ?? ''
+        );
+
+        $one_time = (
+            isset($_POST['one_time_public'])
+            || isset($_POST['one_time_individual'])
+            || isset($_POST['one_time'])
+        ) ? 1 : 0;
+
+        if ($access_mode !== 'public' && empty($original_url)) {
+            $original_url = 'INDIVIDUAL_LINK_MODE';
         }
-    }
 
+
+    // ✅ 8. Jika tidak ada error, mulai simpan
     if (empty($error)) {
         $conn = getDBConnection();
         $user_id = $_SESSION['user_id'];
@@ -58,8 +107,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // =========================
         if (!empty($custom_code)) {
             $short_code = preg_replace('/[^a-zA-Z0-9-_]/', '', $custom_code);
-
-            // Cek apakah sudah dipakai
             $check_stmt = $conn->prepare("SELECT id FROM urls WHERE short_code = ?");
             $check_stmt->bind_param("s", $short_code);
             $check_stmt->execute();
@@ -70,7 +117,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'This custom code is already taken.';
             }
         } else {
-            // Generate otomatis jika tidak ada custom code
             do {
                 $short_code = generateShortCode();
                 $check_stmt = $conn->prepare("SELECT id FROM urls WHERE short_code = ?");
@@ -115,7 +161,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($stmt->execute()) {
                 $url_id = $conn->insert_id;
-    error_log("URL ID created: $url_id");
+                error_log("URL ID created: $url_id");
+
                 // =========================
                 // Simpan peserta jika mode per_code
                 // =========================
@@ -132,7 +179,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $code   = trim($p['code'] ?? '');
                         $target = trim($p['target_url'] ?? '');
 
-                        // ✅ Skip jika data peserta tidak lengkap
                         if (empty($name) || empty($code) || empty($target)) continue;
 
                         // Pastikan code unik
@@ -143,7 +189,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $check_code->close();
 
                         if ($exists) continue;
-
 
                         $insert_code->bind_param("isss", $url_id, $name, $code, $target);
                         if (!$insert_code->execute()) {
@@ -167,6 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $conn->close();
     }
 }
+
 function generateShortCode($length = 6) {
     $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
     $code = '';
@@ -176,6 +222,7 @@ function generateShortCode($length = 6) {
     return $code;
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -526,166 +573,144 @@ html, body {
         <h2><i class="fa-solid fa-wand-magic-sparkles"></i> Create New Short URL</h2>
 
         <?php if ($error): ?>
-        <div class="error"><?= htmlspecialchars($error) ?></div>
-        <?php endif; ?>
+    <div class="error"><?= htmlspecialchars($error) ?></div>
+<?php endif; ?>
 
-        <?php if ($success): ?>
-        <div class="success">
-            <?= htmlspecialchars($success) ?><br>
-            <div class="created-url">
+<?php if ($success): ?>
+    <div class="success">
+        <?= htmlspecialchars($success) ?><br>
+
+        <div class="created-url" style="margin-top:12px;">
+         <?php
+$links = json_decode($original_url, true);
+$is_per_code = ($access_mode === 'per_code');
+?>
+<?php if (!empty($links) || $is_per_code): ?>
+    <ul style="list-style:none;padding-left:0;">
+
+        <?php if ($is_per_code): ?>
+            <li>
                 <span id="createdUrl"><?= htmlspecialchars($created_url) ?></span>
-                <button class="copy-btn" onclick="copyUrl()">Copy</button>
-            </div>
-            <?php if ($qr_base64): ?>
-                <div style="margin-top:15px;text-align:center;">
-                    <p>Scan QR:</p>
-                    <img src="<?= $qr_base64 ?>" width="150" style="border-radius: 15px;">
-                    <br><br>
-                    <a href="<?= $qr_base64 ?>" 
-                    download="<?= 'Qr ' . preg_replace('/[^a-zA-Z0-9-_]/', '_', $title ?: $short_code) ?>.png" 
-                    class="btn" 
-                    style="background:#4fd1c5;">
-                    <i class="fa-solid fa-download"></i> Download QR
-                    </a>
-                </div>
-            <?php endif; ?>
+                <button class="copy-btn">Copy</button>
+                <br>
+                <strong>Participants:</strong>
+                <ul>
+                    <?php foreach ($_POST['participants'] as $p): ?>
+                        <li>
+                            <?= htmlspecialchars($p['name']) ?> 
+                            — Code: <b><?= htmlspecialchars($p['code']) ?></b><br>
+                            Target: <a href="<?= htmlspecialchars($p['target_url']) ?>" target="_blank" style="color:#a5b4fc;">
+                                <?= htmlspecialchars($p['target_url']) ?>
+                            </a>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </li>
 
-        </div>
+        <?php else: ?>
+            <?php foreach ($links as $l): ?>
+                <li>
+                    <span id="createdUrl"><?= htmlspecialchars($created_url) ?></span>
+                    <button class="copy-btn">Copy</button><br>
+                    <strong><?= htmlspecialchars($l['title']) ?>:</strong> 
+                    <a href="<?= htmlspecialchars($l['url']) ?>" target="_blank" style="color:#a5b4fc; text-decoration: none;">
+                        <?= htmlspecialchars($l['url']) ?>
+                    </a>
+                </li>
+            <?php endforeach; ?>
         <?php endif; ?>
+    </ul>
+<?php endif; ?>
+
+
+        <?php if ($qr_base64): ?>
+            <div style="margin-top:15px;text-align:center;">
+                <p>Scan QR:</p>
+                <img src="<?= $qr_base64 ?>" width="150" style="border-radius: 15px;">
+                <br><br>
+                <a href="<?= $qr_base64 ?>" 
+                   download="<?= 'Qr_' . preg_replace('/[^a-zA-Z0-9-_]/', '_', $title ?: $short_code) ?>.png" 
+                   class="btn" 
+                   style="background:#4fd1c5;">
+                    <i class="fa-solid fa-download"></i> Download QR
+                </a>
+            </div>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>
+
 
         <form method="POST">
-            <div class="form-group">
-                <label>Access Mode</label>
-                <select name="access_mode" id="access_mode">
-                    <option value="public">Public</option>
-                    <option value="per_code">Individual</option>
-                </select>
-            </div>
-
-            <!-- === PUBLIC SECTION === -->
-            <div id="public-section">
-                <label>Original URL *</label>
-                <input type="url" name="original_url" placeholder="Required">
-                <label>Title</label>
-                <input type="text" name="title_public" placeholder="Optional">
-                <label>Custom Code (short link)</label>
-                <input type="text" name="custom_code_public" placeholder="Optional">
-                <label>Password</label>
-                <input type="text" name="access_password" placeholder="Optional">
-                <label>Expiration Date</label>
-                <input type="datetime-local" id="expire_at_public" name="expire_at">
-                <div class="checkbox-group" style="margin-top: 20px;">
-                    <input type="checkbox" id="one_time" name="one_time_public">
-                    <label for="one_time"><span>One-time Access</span></label>
-                </div>
-            </div>
-
-            <!-- === INDIVIDUAL SECTION === -->
-            <div id="individual-section" style="display:none;">
-                <label>Title</label>
-                <input type="text" name="title_individual">
-                <label>Custom Code (short link)</label>
-                <input type="text" name="custom_code_individual" placeholder="Optional">
-                <label>Expiration Date</label>
-                <input type="datetime-local" id="expire_at_individual" name="expire_at">
-                <div class="checkbox-group" style="margin-top: 20px;">
-                    <input type="checkbox" id="one_time_individual" name="one_time_individual">
-                    <label for="one_time_individual"><span>One-time Access</span></label>
-                </div>
-                <label>Participants</label>
-                <div id="participants-container">
-                    <div class="participant-row">
-                        <input type="text" name="participants[0][name]" placeholder="Nama Peserta">
-                        <input type="text" name="participants[0][code]" placeholder="Kode Unik">
-                        <input type="url" name="participants[0][target_url]" placeholder="URL Tujuan">
-                    </div>
-                </div>
-                <button type="button" id="addParticipantBtn" class="btn">+ Tambah Peserta</button>
-            </div>
-            <button type="submit" class="btn"><i class="fa-solid fa-scissors"></i> Create Short URL</button>
-        </form>
+    <div class="form-group">
+        <label>Access Mode</label>
+        <select name="access_mode" id="access_mode">
+            <option value="public">Public</option>
+            <option value="per_code">Individual</option>
+        </select>
     </div>
 
+    <!-- UNIVERSAL FIELD -->
+    <label>Main Title</label>
+    <input type="text" name="main_title" placeholder="Optional">
+
+    <label>Custom Code (short link)</label>
+    <input type="text" name="custom_code" placeholder="Optional">
+    <div class="form-group" id="password-group">
+    <label>Password</label>
+    <input type="text" name="access_password" placeholder="Optional">
+    </div>
+    <label>Expiration Date</label>
+    <input type="datetime-local" name="expire_at">
+
+    <div class="checkbox-group" style="margin-top: 20px;">
+        <input type="checkbox" id="one_time" name="one_time">
+        <label for="one_time"><span>One-time Access</span></label>
+    </div>
+
+    <!-- PUBLIC SECTION -->
+    <div id="public-section">
+        <label>Original Links *</label>
+        <div id="multi-links">
+            <div class="link-item">
+                <input type="url" name="original_url[]" placeholder="Enter a link">
+                <input type="text" name="title_public[]" placeholder="Title for this link (optional)" style="margin-top:8px;">
+            </div>
+        </div>
+        <button type="button" id="add-link" class="btn" style="margin-top:8px;">+ Add Another Link</button>
+    </div>
+
+    <!-- INDIVIDUAL SECTION -->
+    <div id="individual-section" style="display:none;">
+        <label>Participants</label>
+        <div id="participants-container">
+            <div class="participant-row">
+                <input type="text" name="participants[0][name]" placeholder="Nama Peserta">
+                <input type="text" name="participants[0][code]" placeholder="Kode Unik">
+                <input type="url" name="participants[0][target_url]" placeholder="URL Tujuan">
+            </div>
+        </div>
+        <button type="button" id="addParticipantBtn" class="btn">+ Add Participant</button>
+    </div>
+
+    <button type="submit" class="btn"><i class="fa-solid fa-scissors"></i> Create Short URL</button>
+</form>
+
+    </div>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const modeSelect = document.getElementById('access_mode');
-    const publicSection = document.getElementById('public-section');
-    const individualSection = document.getElementById('individual-section');
-    const originalInput = document.querySelector('input[name="original_url"]');
 
-    // Format datetime untuk atribut min
-    function formatDateTime(date) {
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        const h = String(date.getHours()).padStart(2, '0');
-        const i = String(date.getMinutes()).padStart(2, '0');
-        return `${y}-${m}-${d}T${h}:${i}`;
-    }
-    // Set min semua input datetime-local
-    document.querySelectorAll('input[type="datetime-local"]').forEach(input => {
-        input.min = formatDateTime(new Date());
-    });
+    /* === COPY URL FUNCTION === */
+    document.body.addEventListener('click', e => {
+        if (!e.target.classList.contains('copy-btn')) return;
 
-    // Atur tampilan awal (saat halaman pertama kali dimuat)
-    
-    function updateMode() {
-    if (modeSelect.value === 'per_code') {
-        publicSection.style.display = 'none';
-        individualSection.style.display = 'block';
-        originalInput.removeAttribute('required');
+        const span = e.target.closest('li')?.querySelector('#createdUrl');
+        if (!span) return;
 
-        // Disable input public
-        publicSection.querySelectorAll('input, select, textarea').forEach(el => {
-            el.readonly = true;
-        });
-        // Enable input individual, terutama participants
-        individualSection.querySelectorAll('input, select, textarea').forEach(el => {
-            el.readonly = false; // Jangan readonly, pakai disabled=false
-        });
-    } else {
-        publicSection.style.display = 'block';
-        individualSection.style.display = 'none';
-        originalInput.setAttribute('required', true);
+        const urlText = span.textContent.trim();
+        if (!urlText) return;
 
-        // Disable input individual
-        individualSection.querySelectorAll('input, select, textarea').forEach(el => {
-            el.readonly = true;
-        });
-        // Enable input public
-        publicSection.querySelectorAll('input, select, textarea').forEach(el => {
-            el.readonly = false;
-        });
-    }
-}
-
-    updateMode(); // Jalankan saat load pertama
-    modeSelect.addEventListener('change', updateMode);
-    // Tombol tambah peserta
-        const addBtn = document.getElementById('addParticipantBtn');
-        if (addBtn) {
-            addBtn.addEventListener('click', () => {
-        const container = document.getElementById('participants-container');
-        const idx = container.children.length;
-        const row = document.createElement('div');
-        row.className = 'participant-row';
-        row.innerHTML = `
-            <input type="text" name="participants[${idx}][name]" placeholder="Nama Peserta">
-            <input type="text" name="participants[${idx}][code]" placeholder="Kode Unik">
-            <input type="url" name="participants[${idx}][target_url]" placeholder="URL Tujuan">
-        `;
-        container.appendChild(row);
-
-        // pastikan semua input baru tidak disabled
-        row.querySelectorAll('input').forEach(el => el.disabled = false);
-    });
-    }
-
-    // Tombol copy link
-    window.copyUrl = function() {
-        const urlText = document.getElementById('createdUrl').textContent.trim();
         navigator.clipboard.writeText(urlText).then(() => {
-            const btn = document.querySelector('.copy-btn');
+            const btn = e.target;
             const original = btn.innerHTML;
             btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
             btn.style.background = '#3ccf5a';
@@ -694,9 +719,105 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.style.background = '#28a745';
             }, 2000);
         });
-    };
+    });
+
+    /* === ADD MULTI LINKS === */
+    const addLinkBtn = document.getElementById('add-link');
+    if (addLinkBtn) {
+        addLinkBtn.addEventListener('click', () => {
+            const container = document.getElementById('multi-links');
+            const newInput = document.createElement('div');
+            newInput.classList.add('link-item');
+            newInput.innerHTML = `
+                <input type="url" name="original_url[]" placeholder="Enter a link" style="margin-top:10px;">
+                <input type="text" name="title_public[]" placeholder="Title for this link (optional)" style="margin-top:8px;">
+            `;
+            container.appendChild(newInput);
+        });
+    }
+
+    /* === ADD PARTICIPANTS === */
+    const addParticipantBtn = document.getElementById('addParticipantBtn');
+    if (addParticipantBtn) {
+        addParticipantBtn.addEventListener('click', () => {
+            const container = document.getElementById('participants-container');
+            const idx = container.children.length;
+            const row = document.createElement('div');
+            row.className = 'participant-row';
+            row.innerHTML = `
+                <input type="text" name="participants[${idx}][name]" placeholder="Nama Peserta">
+                <input type="text" name="participants[${idx}][code]" placeholder="Kode Unik">
+                <input type="url" name="participants[${idx}][target_url]" placeholder="URL Tujuan">
+            `;
+            container.appendChild(row);
+        });
+    }
+
+    /* === DATETIME MINIMUM === */
+    function formatDateTime(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        const h = String(date.getHours()).padStart(2, '0');
+        const i = String(date.getMinutes()).padStart(2, '0');
+        return `${y}-${m}-${d}T${h}:${i}`;
+    }
+    document.querySelectorAll('input[type="datetime-local"]').forEach(input => {
+        input.min = formatDateTime(new Date());
+    });
+
+    /* === ACCESS MODE SWITCH === */
+    const modeSelect = document.getElementById('access_mode');
+    const publicSection = document.getElementById('public-section');
+    const individualSection = document.getElementById('individual-section');
+    const passwordGroup = document.getElementById('password-group');
+
+
+    function toggleMode() {
+        const mode = modeSelect.value;
+
+        if (mode === 'per_code') {
+    passwordGroup.style.display = 'none';
+} else {
+    passwordGroup.style.display = '';
+}
+
+        if (mode === 'per_code') {
+            publicSection.style.display = 'none';
+            individualSection.style.display = 'block';
+
+            // Disable semua input di public-section
+            publicSection.querySelectorAll('input, select, textarea, button').forEach(el => {
+                el.disabled = true;
+            });
+
+            // Enable semua input di individual-section
+            individualSection.querySelectorAll('input, select, textarea, button').forEach(el => {
+                el.disabled = false;
+            });
+        } else {
+            publicSection.style.display = 'block';
+            individualSection.style.display = 'none';
+
+            // Enable semua input di public-section
+            publicSection.querySelectorAll('input, select, textarea, button').forEach(el => {
+                el.disabled = false;
+            });
+
+            // Disable semua input di individual-section
+            individualSection.querySelectorAll('input, select, textarea, button').forEach(el => {
+                el.disabled = true;
+            });
+        }
+    }
+
+    if (modeSelect) {
+        toggleMode();
+        modeSelect.addEventListener('change', toggleMode);
+    }
 });
 </script>
+
 
 </body>
 </html>

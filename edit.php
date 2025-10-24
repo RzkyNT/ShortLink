@@ -47,10 +47,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user_id = $_SESSION['user_id'];
 
     $url_id = $_POST['id'] ?? 0;
-    $title = trim($_POST['title'] ?? '');
     $status = $_POST['status'] ?? 'active';
     $expire_at = !empty($_POST['expire_at']) ? date('Y-m-d H:i:s', strtotime($_POST['expire_at'])) : null;
     $one_time = isset($_POST['one_time']) ? 1 : 0;
+    $title = trim($_POST['title'] ?? ''); // hanya ambil dari input main title, bukan dari original_url
 
     // Ambil mode
     $stmt = $conn->prepare("SELECT access_mode FROM urls WHERE id = ? AND user_id = ?");
@@ -62,25 +62,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $access_password = trim($_POST['access_password'] ?? '');
     $access_password = $access_password !== '' ? $access_password : null;
 
+
     if ($access_mode === 'public') {
-        $original_url = trim($_POST['original_url'] ?? '');
+    $original_url_input = $_POST['original_url'] ?? '';
+    $original_url = '';
+
+    if (is_array($original_url_input)) {
+        // Multi link
+        $clean_urls = [];
+
+        foreach ($original_url_input as $item) {
+            $item_title = trim($item['title'] ?? '');
+            $item_url   = trim($item['url'] ?? '');
+
+            if ($item_url === '') continue;
+            if (!filter_var($item_url, FILTER_VALIDATE_URL)) {
+                $error = 'Please enter a valid URL';
+                break;
+            }
+
+            $clean_urls[] = [
+                'title' => $item_title,
+                'url'   => $item_url
+            ];
+        }
+
+
+        if (empty($clean_urls)) {
+            $error = 'Please enter at least one valid URL';
+        } else {
+            $original_url = json_encode($clean_urls, JSON_UNESCAPED_SLASHES);
+        }
+    } else {
+        // Single URL
+        $original_url = trim($original_url_input);
         if (empty($original_url)) {
             $error = 'Please enter a URL';
         } elseif (!filter_var($original_url, FILTER_VALIDATE_URL)) {
             $error = 'Please enter a valid URL';
-        } else {
-            
-            $stmt = $conn->prepare("
-                UPDATE urls 
-                SET original_url = ?, title = ?, status = ?, expire_at = ?, one_time = ?, access_password = ?
-                WHERE id = ? AND user_id = ?
-            ");
-            $stmt->bind_param("ssssissi", $original_url, $title, $status, $expire_at, $one_time, $access_password, $url_id, $user_id);
-            $stmt->execute();
-            $stmt->close();
-            header('Location: dashboard.php?success=updated');
-            exit;
         }
+    }
+
+    // ✅ UPDATE selalu dijalankan selama tidak ada error
+    if (empty($error)) {
+        $stmt = $conn->prepare("
+            UPDATE urls 
+            SET original_url = ?, title = ?, status = ?, expire_at = ?, one_time = ?, access_password = ?
+            WHERE id = ? AND user_id = ?
+        ");
+        $stmt->bind_param("ssssissi", $original_url, $title, $status, $expire_at, $one_time, $access_password, $url_id, $user_id);
+        $stmt->execute();
+        $stmt->close();
+
+        header('Location: dashboard.php?success=updated');
+        exit;
+    }
     } elseif ($access_mode === 'per_code') {
         // Update data utama
         $stmt = $conn->prepare("
@@ -566,6 +602,28 @@ input[type="datetime-local"]:not([value]):valid::-webkit-datetime-edit-minute-fi
   font-weight: 600;
 }
 
+.url-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.url-row input {
+    flex: 1 1 45%;
+}
+.delete-url-btn {
+    background: #ff4d4d;
+    border: none;
+    color: white;
+    width: 40px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+.delete-url-btn:hover {
+    background: #e03e3e;
+}
+
     /* 🔒 Nonaktifkan seleksi teks di seluruh halaman */
 body {
   -webkit-user-select: none;  /* Safari/Chrome */
@@ -616,17 +674,14 @@ html, body {
             <form method="POST" action="">
         <input type="hidden" name="id" value="<?= $url_data['id'] ?>">
 
-        <label>Title</label>
-        <input type="text" name="title" value="<?= htmlspecialchars($url_data['title']) ?>">
+        <label>Main Title</label>
+        <input type="text" name="title" value="<?= htmlspecialchars($url_data['title']) ?>" placeholder="Main title for this link group">
 
         <label style="margin-top: 10px;">Status</label>
         <select name="status">
             <option value="active" <?= $url_data['status']==='active'?'selected':'' ?>>Active</option>
             <option value="inactive" <?= $url_data['status']==='inactive'?'selected':'' ?>>Inactive</option>
         </select>
-        
-        <label>Password</label>
-        <input type="text" name="access_password" placeholder="Optional" value="<?= $url_data['access_password']?? '' ?>">
         
         <label style="margin-top: 10px;">Expiration Date</label>
         <input type="datetime-local" name="expire_at" value="<?= $url_data['expire_at'] ? date('Y-m-d\TH:i', strtotime($url_data['expire_at'])) : '' ?>">
@@ -636,8 +691,32 @@ html, body {
             </div>
 
         <?php if ($url_data['access_mode'] === 'public'): ?>
-            <label>Original URL *</label>
-            <input type="url" name="original_url" value="<?= htmlspecialchars($url_data['original_url']) ?>" required>
+            <label>Original URL(s) *</label>
+            <div id="url-container">
+            <?php
+            $urls = json_decode($url_data['original_url'], true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($urls)) {
+                foreach ($urls as $i => $item): ?>
+                    <div class="url-row">
+                        <input type="text" name="original_url[<?= $i ?>][title]" placeholder="Title" 
+                            value="<?= htmlspecialchars($item['title'] ?? '') ?>">
+                        <input type="url" name="original_url[<?= $i ?>][url]" placeholder="URL" 
+                            value="<?= htmlspecialchars($item['url'] ?? '') ?>" required>
+                        <button type="button" class="delete-url-btn"><i class="fas fa-trash"></i></button>
+                    </div>
+                <?php endforeach;
+            } else { ?>
+                <div class="url-row">
+                    <input type="text" name="original_url[0][title]" placeholder="Title (optional)">
+                    <input type="url" name="original_url[0][url]" value="<?= htmlspecialchars($url_data['original_url']) ?>" required>
+                    <button type="button" class="delete-url-btn"><i class="fas fa-trash"></i></button>
+                </div>
+            <?php } ?>
+            </div>
+            <button type="button" id="addUrlBtn" class="btn" style="margin-top:10px;">+ Add Link</button>
+            <label>Password</label>
+            <input type="text" name="access_password" placeholder="Optional" value="<?= $url_data['access_password']?? '' ?>">
+        
         <?php else: ?>
             <h3>Participants</h3>
             <div id="participants-container">
@@ -660,7 +739,38 @@ html, body {
 </div>
 
 <script>
-      // Format datetime untuk atribut min
+// ====== MULTI URL HANDLER ======
+document.getElementById('addUrlBtn')?.addEventListener('click', () => {
+    const container = document.getElementById('url-container');
+    const idx = container.children.length;
+    const row = document.createElement('div');
+    row.className = 'url-row';
+    row.innerHTML = `
+        <input type="text" name="original_url[${idx}][title]" placeholder="Title (optional)">
+        <input type="url" name="original_url[${idx}][url]" placeholder="URL" required>
+        <button type="button" class="delete-url-btn"><i class="fas fa-trash"></i></button>
+    `;
+    container.appendChild(row);
+});
+
+// Hapus URL row
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.delete-url-btn')) {
+        const row = e.target.closest('.url-row');
+        if (document.querySelectorAll('.url-row').length > 1) {
+            row.remove();
+        } else {
+            Swal.fire({
+                icon: 'info',
+                text: 'Minimal satu URL harus ada.',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        }
+    }
+});
+
+// Format datetime untuk atribut min
     function formatDateTime(date) {
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, '0');

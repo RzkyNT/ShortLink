@@ -1,12 +1,12 @@
 <?php
-session_start();
 require_once 'config/database.php';
 
-$success_url = '';
-$error = '';
+$error = null;
+$success_url = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['shorten_url'])) {
     $original_url = trim($_POST['original_url'] ?? '');
+    $title = trim($_POST['title'] ?? 'Link'); // optional title
 
     if (empty($original_url)) {
         $error = 'Please enter a URL';
@@ -14,6 +14,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['shorten_url'])) {
         $error = 'Please enter a valid URL';
     } else {
         $conn = getDBConnection();
+
+        // generate short code unik
         do {
             $short_code = generateShortCode();
             $check_stmt = $conn->prepare("SELECT id FROM urls WHERE short_code = ?");
@@ -23,19 +25,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['shorten_url'])) {
             $check_stmt->close();
         } while ($exists);
 
+        // simpan original_url sebagai JSON array
+        $json_url = json_encode([['title' => $title, 'url' => $original_url]]);
+
         $stmt = $conn->prepare("INSERT INTO urls (short_code, original_url, status, user_id) VALUES (?, ?, 'active', NULL)");
-        $stmt->bind_param("ss", $short_code, $original_url);
+        $stmt->bind_param("ss", $short_code, $json_url);
 
         if ($stmt->execute()) {
             $success_url = BASE_URL . $short_code;
         } else {
             $error = 'Error creating short URL';
         }
+
         $stmt->close();
         $conn->close();
     }
 }
 
+// Fungsi generate short code
 function generateShortCode($length = 6) {
     $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
     $code = '';
@@ -45,8 +52,8 @@ function generateShortCode($length = 6) {
     return $code;
 }
 
+// ambil stats seperti biasa
 $conn = getDBConnection();
-
 $stats_query = "
     SELECT 
         COUNT(DISTINCT u.id) AS total_urls,
@@ -58,11 +65,11 @@ $stats_query = "
     FROM urls u
     LEFT JOIN url_clicks c ON u.id = c.url_id
 ";
-
 $stats_result = $conn->query($stats_query);
 $stats = $stats_result->fetch_assoc();
 $conn->close();
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -84,12 +91,15 @@ $conn->close();
     /* NAVIGATION */
     nav {
         position: sticky;
-        top: 0;
+        top:1vh;
         backdrop-filter: blur(10px);
-        background: rgba(15,17,22,0.9);
+        background: rgb(15 17 22 / 28%);
         padding: 15px 0;
         z-index: 1000;
         box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        margin-right:1vh;
+        margin-left:1vh;
+        border-radius:12px;
     }
     .nav-container {
         max-width: 1200px; margin: 0 auto;
@@ -206,7 +216,7 @@ $conn->close();
     /* FEATURES */
     .features {
         padding: 100px 20px;
-        background: rgba(15,17,22,0.9);
+        background: rgb(15 17 22 / 70%);
         backdrop-filter:blur(10px);
         margin-top:50px;
     }
@@ -249,7 +259,7 @@ $conn->close();
     /* STATS */
     .stats {
         padding: 10vh 20px;
-        background:radial-gradient(circle at bottom, rgba(26, 28, 37, 1) 0%, rgba(67, 113, 228, 0.8) 100%);
+        background:radial-gradient(circle at bottom, rgb(26 28 37 / 73%) 0%, rgb(67 113 228 / 52%) 100%);
         backdrop-filter:blur(10px);
         text-align: center; color: white;
         margin-top:50px;
@@ -266,7 +276,7 @@ $conn->close();
     .cta {
         padding: 100px 20px;
         text-align: center;        
-        background:radial-gradient(circle at top, rgba(26, 28, 37, 1) 0%, rgba(67, 113, 228, 0.8) 100%)
+        background:radial-gradient(circle at top, rgb(26 28 37 / 73%) 0%, rgb(67 113 228 / 52%) 100%)
     }
     .cta h2 {
         font-size: 36px;
@@ -366,7 +376,7 @@ html, body {
                 <h3><i class="fa-solid fa-check-circle"></i> Short URL Created!</h3>
                 <div class="short-url-container">
                     <input type="text" class="short-url-display" id="shortUrl" readonly value="<?= htmlspecialchars($success_url) ?>">
-                    <button class="copy-btn" onclick="copyUrl()"><i class="fa-solid fa-copy"></i></button>
+                    <button class="copy-btn"><i class="fa-solid fa-copy"></i></button>
                 </div>
                 <p style="margin-top:15px;color:#999;font-size:14px;">
                     <a href="login.php" style="color:#7a5af8;">Login</a> to manage your URLs
@@ -617,16 +627,31 @@ document.getElementById('create-link-btn').addEventListener('click', function(e)
 </footer>
 
 <script>
+    
 function copyUrl() {
-    const urlText = document.getElementById('shortUrl').textContent;
+    const urlText = document.getElementById('shortUrl')?.value;
+    if (!urlText) return;
+
     navigator.clipboard.writeText(urlText).then(() => {
         const btn = document.querySelector('.copy-btn');
+        if (!btn) return;
         const original = btn.innerHTML;
         btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
         btn.style.background = '#3ccf5a';
-        setTimeout(() => { btn.innerHTML = original; btn.style.background = '#28a745'; }, 2000);
+
+        setTimeout(() => {
+            btn.innerHTML = original;
+            btn.style.background = '#28a745';
+        }, 2000);
     });
 }
+
+// Pasang event listener, CSP-friendly
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.querySelector('.copy-btn');
+    if (btn) btn.addEventListener('click', copyUrl);
+});
+
 </script>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.clouds.min.js"></script>

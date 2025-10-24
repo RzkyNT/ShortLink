@@ -414,8 +414,28 @@ td[data-label="Original URL"] {
 
                             </td>
                             <td data-label="Original URL" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                <?= htmlspecialchars($row['original_url']) ?>
+                                <?php
+                                $original = $row['original_url'];
+                                $decoded = json_decode($original, true);
+
+                                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                                    // Jika JSON array, tampilkan setiap item title + url
+                                    foreach ($decoded as $item) {
+                                        $title = htmlspecialchars($item['title'] ?? '(no title)');
+                                        $url = htmlspecialchars($item['url'] ?? '');
+                                        echo "<div style='margin-bottom:4px;'>
+                                                <strong>$title</strong> 
+                                                <a href='$url' target='_blank' style='color:#667eea; text-decoration:none;'>→ $url</a>
+                                            </div>";
+                                    }
+                                } else {
+                                    // Jika bukan JSON, tampilkan seperti biasa
+                                    echo "<a href='" . htmlspecialchars($original) . "' target='_blank' style='color:#667eea; text-decoration:none;'>"
+                                        . htmlspecialchars($original) . "</a>";
+                                }
+                                ?>
                             </td>
+
                             <td data-label="Title"><?= htmlspecialchars($row['title'] ?? '-') ?></td>
                             <td data-label="Clicks"><?= $row['click_count'] ?></td>
                             <td data-label="Status">
