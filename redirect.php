@@ -279,7 +279,8 @@ function notFound($msg = "Short URL not found or inactive.") {
             justify-content: center;
             height: 100vh;
             margin: 0;
-            
+    overflow-x: hidden;  /* hilangkan scroll horizontal */
+    overflow-y: hidden;
   -webkit-user-select: none;
   user-select: none;
         }
@@ -288,9 +289,10 @@ function notFound($msg = "Short URL not found or inactive.") {
             border: 1px solid rgba(255,255,255,0.1);
             border-radius: 20px;
             padding: 60px 40px;
+            width: 90%;
             max-width: 420px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(4px);
             animation: fadeIn 0.6s ease;
         }
         h1 {
@@ -325,12 +327,44 @@ a:hover {
             to { opacity: 1; transform: translateY(0); }
         }
             
-input, textarea, select, button, [contenteditable] {
-  -webkit-user-select: text;
-  user-select: text;
+/* 🔒 Nonaktifkan seleksi teks di seluruh halaman */
+body {
+  -webkit-user-select: none;  /* Safari/Chrome */
+  -moz-user-select: none;     /* Firefox */
+  -ms-user-select: none;      /* IE/Edge lama */
+  user-select: none;          /* Standar */
+  -webkit-tap-highlight-color: transparent; /* Hilangkan highlight saat tap di mobile */
 }
-html, body { touch-action: manipulation; }
 
+/* ✅ Izinkan seleksi & interaksi normal di elemen form */
+input,
+textarea,
+select,
+button,
+[contenteditable] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  -webkit-tap-highlight-color: inherit;
+}
+html, body {
+  touch-action: manipulation;
+}
+
+a {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: all 0.3s ease;
+  display: block;          /* ganti inline-block → block */
+  width: 100%;             /* isi penuh lebar parent */
+  box-sizing: border-box;  /* supaya padding tidak melebihi width */
+}
     </style></head><body>
     <div class='box'>
     <h1>
@@ -474,9 +508,34 @@ button:hover, .btn:hover {
     width: 100%;
   }
 }
+    /* 🔒 Nonaktifkan seleksi teks di seluruh halaman */
+body {
+  -webkit-user-select: none;  /* Safari/Chrome */
+  -moz-user-select: none;     /* Firefox */
+  -ms-user-select: none;      /* IE/Edge lama */
+  user-select: none;          /* Standar */
+  -webkit-tap-highlight-color: transparent; /* Hilangkan highlight saat tap di mobile */
+}
+
+/* ✅ Izinkan seleksi & interaksi normal di elemen form */
+input,
+textarea,
+select,
+button,
+[contenteditable] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  -webkit-tap-highlight-color: inherit;
+}
+html, body {
+  touch-action: manipulation;
+}
 </style>
 </head>
 <body>
+
 <div class="box">
 <?php if (!$can_access): ?>
   <h2><i class="fas fa-lock"></i> Protected Link</h2>
