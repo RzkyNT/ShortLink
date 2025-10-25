@@ -360,22 +360,12 @@ html, body { touch-action: manipulation; }
     exit;
 }
 ?>
-<?php
-  // Decode JSON array selalu
-  $urls = json_decode($url_data['original_url'] ?? '[]', true);
-  $urls = is_array($urls) ? $urls : [];
-  $count = count($urls);
-  $is_multi = $count > 1;
-  $single_target = $urls[0]['url'] ?? '#';
-  $single_title = $urls[0]['title'] ?? $single_target;
-  $host_name = parse_url($single_target, PHP_URL_HOST) ?? "Link";
-?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= htmlspecialchars($main_title ?? 'Go to ' . $host) ?></title>
+<title><?= htmlspecialchars($main_title ?? 'Go to ' . ($host ?? 'Link')) ?></title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css">
@@ -442,7 +432,9 @@ button, .btn {
   text-decoration: none;
   display: inline-block;
   transition: all 0.3s ease;
-  width:60vh;
+  display: block;          /* ganti inline-block → block */
+  width: 100%;             /* isi penuh lebar parent */
+  box-sizing: border-box;  /* supaya padding tidak melebihi width */
 }
 button:hover, .btn:hover {
   background: linear-gradient(135deg, #5568d3, #2e4ed8ff);
@@ -508,15 +500,35 @@ button:hover, .btn:hover {
 
 <?php else: ?>
 <?php
-  // Decode JSON array selalu
+  // Decode JSON array selalu (untuk mode multi-link / public)
   $urls = json_decode($url_data['original_url'] ?? '[]', true);
   $urls = is_array($urls) ? $urls : [];
   $count = count($urls);
   $is_multi = $count > 1;
-  $single_target = $urls[0]['url'] ?? $target_url;
-  $single_title = $urls[0]['title'] ?? 'Click here!';
+
+  // 🔧 Prioritaskan target_url dari tabel url_codes jika ada (mode per_code)
+  if (!empty($code_data['target_url'])) {
+      $single_target = $code_data['target_url'];
+      // Jika ada judul khusus di code_data, gunakan, jika tidak fallback ke participant_name atau default
+      $single_title = $code_data['target_title'] 
+          ?? $code_data['participant_name'] 
+          ?? 'Click here!';
+  } 
+  // 🔧 Jika tidak ada target_url per_code, pakai data dari original_url
+  elseif (!empty($urls)) {
+      $single_target = $urls[0]['url'] ?? '#';
+      $single_title = $urls[0]['title'] ?? 'Click here!';
+  } 
+  // 🔧 Fallback terakhir (tidak ada data valid)
+  else {
+      $single_target = $target_url ?? '#';
+      $single_title = 'Click here!';
+  }
+
+  // Deteksi nama host
   $host_name = parse_url($single_target, PHP_URL_HOST) ?? "Link";
 ?>
+
   <h1><i class="fas fa-external-link-alt"></i>
     <?= $is_multi ?  htmlspecialchars($main_title) :  htmlspecialchars($host ?? $target_url) ?>
   </h1>
@@ -542,7 +554,6 @@ button:hover, .btn:hover {
         <?php endforeach; ?>
     </div>
 <?php else: ?>
-    <p style="color:#a5b4fc; word-break:break-all;"><?= htmlspecialchars($single_target ?? $target_url) ?></p>
     <a href="<?= htmlspecialchars($single_target ?? $target_url) ?>" class="btn"><?= htmlspecialchars($single_title ?? 'Click here!') ?></a>
 <?php endif; ?> <!-- <-- INI HARUS DITAMBAHKAN -->
 </div> <!-- result-container -->
