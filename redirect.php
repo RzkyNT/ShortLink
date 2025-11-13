@@ -127,6 +127,47 @@ if ($requires_code && !empty($code_data['target_url'])) {
     }
 }
 
+// === 📸 AUTO GENERATE PREVIEW JIKA BELUM ADA ===
+$preview_base64 = $url_data['preview_base64'] ?? '';
+
+if (empty($preview_base64) && filter_var($target_url, FILTER_VALIDATE_URL)) {
+    $api_url = 'https://api.screenshotone.com/take';
+    $query = [
+        'access_key' => 'duAaHYw2b-sumg',
+        'url' => $target_url,
+        'viewport_device' => 'galaxy_s5_landscape',
+        'format' => 'jpg',
+        'block_ads' => 'true',
+        'block_cookie_banners' => 'true',
+        'block_banners_by_heuristics' => 'false',
+        'block_trackers' => 'true',
+        'delay' => '0',
+        'timeout' => '60',
+        'response_type' => 'json',
+        'image_quality' => '80',
+    ];
+    $full_url = $api_url . '?' . http_build_query($query);
+
+    $context = stream_context_create(['http' => ['timeout' => 10]]);
+    $response = @file_get_contents($full_url, false, $context);
+
+    if ($response !== false) {
+        $data = json_decode($response, true);
+        if (!empty($data['screenshot_url'])) {
+            $image_data = @file_get_contents($data['screenshot_url']);
+            if ($image_data !== false) {
+                $preview_base64 = 'data:image/jpeg;base64,' . base64_encode($image_data);
+
+                // Simpan ke DB agar tidak perlu ambil ulang
+                $stmt = $conn->prepare("UPDATE urls SET preview_base64 = ? WHERE id = ?");
+                $stmt->bind_param("si", $preview_base64, $url_data['id']);
+                $stmt->execute();
+                $stmt->close();
+            }
+        }
+    }
+}
+
 $main_title = $url_data['title'] ?? '';
 $host = parse_url($target_url, PHP_URL_HOST);
 $qr_base64 = $url_data['qr_base64'] ?? '';
@@ -593,14 +634,12 @@ html, body {
   </h1>
   <p style="color:#a5b4fc;word-break:break-all;">
     <?= $is_multi ? 'Choose to visit' : 'Ready to visit'?></p>
-  <?php if (!$is_multi && !empty($qr_base64)): ?>
-    <div id="qrModal" style="margin-top:25px;">
-      <a href="<?= $qr_base64 ?>" download="Qr <?= preg_replace('/[^a-zA-Z0-9-_]/','_', $url_data['title'] ?? $short_code) ?>.png">
-        <img src="<?= $qr_base64 ?>" width="130" height="130" style="border-radius:8px; cursor:pointer; box-shadow:0 0 12px rgba(102,126,234,0.3);">
-      </a>
-      <p style="font-size:12px;color:#888;">Klik QR untuk download</p>
-    </div>
-  <?php endif; ?>
+  <?php if (!empty($preview_base64)): ?>
+<div style="margin-top:25px;">
+  <img src="<?= $preview_base64 ?>" width="100%" style="border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.4);">
+  <p style="font-size:12px;color:#888;">Preview website tujuan</p>
+</div>
+<?php endif; ?>
   <div class="result-container">
 <?php if ($is_multi): ?>
     <div class="multi-links">
