@@ -452,6 +452,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  min-height: 100vh;
   margin: 0;
   padding: 40px 20px;
   -webkit-user-select: none;
@@ -605,7 +606,7 @@ h1 {
       border-radius: 12px;
       box-shadow: 0 10px 40px rgba(0,0,0,0.3);
       aspect-ratio: 16 / 10;
-      object-fit: cover;
+      object-fit: fill;
       background-color: rgba(255,255,255,0.05);
   }
   .links-column {
@@ -614,10 +615,16 @@ h1 {
       flex-direction: column;
       gap: 15px;
   }
-  html, body {
-  overflow-x: hidden !important; /* ⛔ sembunyikan scroll horizontal */
-}
 
+  .skeleton {
+    background-color: rgba(255, 255, 255, 0.1);
+    animation: pulse 1.5s infinite ease-in-out;
+  }
+  @keyframes pulse {
+      0% { background-color: rgba(255, 255, 255, 0.08); }
+      50% { background-color: rgba(255, 255, 255, 0.15); }
+      100% { background-color: rgba(255, 255, 255, 0.08); }
+  }
 </style>
 </head>
 <body>
@@ -651,47 +658,7 @@ h1 {
     $is_multi = $count > 1;
 
     if ($is_multi) {
-      $updated_urls_for_db = false;
-      foreach ($urls as $key => &$link_item) {
-          if (empty($link_item['preview_base64']) && !empty($link_item['url']) && filter_var($link_item['url'], FILTER_VALIDATE_URL)) {
-              $api_url = 'https://api.screenshotone.com/take';
-              $query = [
-                  'access_key' => 'duAaHYw2b-sumg',
-                  'url' => $link_item['url'],
-                  'viewport_device' => 'galaxy_s5_landscape',
-                  'format' => 'jpg',
-                  'block_ads' => 'true',
-                  'block_cookie_banners' => 'true',
-                  'block_banners_by_heuristics' => 'false',
-                  'block_trackers' => 'true',
-                  'delay' => '0',
-                  'timeout' => '60',
-                  'response_type' => 'json',
-                  'image_quality' => '80',
-              ];
-              $full_url = $api_url . '?' . http_build_query($query);
-              $context = stream_context_create(['http' => ['timeout' => 10]]);
-              $response = @file_get_contents($full_url, false, $context);
-              if ($response !== false) {
-                  $data = json_decode($response, true);
-                  if (!empty($data['screenshot_url'])) {
-                      $image_data = @file_get_contents($data['screenshot_url']);
-                      if ($image_data !== false) {
-                          $link_item['preview_base64'] = 'data:image/jpeg;base64,' . base64_encode($image_data);
-                          $updated_urls_for_db = true;
-                      }
-                  }
-              }
-          }
-      }
-      unset($link_item);
-      if ($updated_urls_for_db) {
-          $updated_json = json_encode($urls);
-          $update_stmt = $conn->prepare("UPDATE urls SET original_url = ? WHERE id = ?");
-          $update_stmt->bind_param("si", $updated_json, $url_data['id']);
-          $update_stmt->execute();
-          $update_stmt->close();
-      }
+      // Preview generation is now handled by client-side JavaScript
     }
 
     if (!empty($code_data['target_url'])) {
@@ -716,11 +683,16 @@ h1 {
       <p style="color:#a5b4fc;word-break:break-all;">Choose a destination to visit</p>
     <div class="multi-link-wrapper">
         <div class="preview-column">
-            <img id="multi-link-preview-image" src="<?= $urls[0]['preview_base64'] ?? 'favicon.png' ?>" alt="Link preview">
+            <img id="multi-link-preview-image" src="" alt="Link preview" class="skeleton">
         </div>
         <div class="links-column">
-            <?php foreach ($urls as $u): ?>
-                <a href="<?= htmlspecialchars($u['url']) ?>" class="btn preview-btn" target="_blank" data-preview="<?= $u['preview_base64'] ?? '' ?>">
+            <?php foreach ($urls as $key => $u): ?>
+                <a href="<?= htmlspecialchars($u['url']) ?>" 
+                   class="btn preview-btn" 
+                   target="_blank"
+                   data-preview="<?= $u['preview_base64'] ?? '' ?>"
+                   data-index="<?= $key ?>"
+                   data-url-id="<?= $url_data['id'] ?>">
                     <?= htmlspecialchars($u['title'] ?: $u['url']) ?>
                 </a>
             <?php endforeach; ?>
@@ -755,18 +727,79 @@ h1 {
 <?php $conn->close(); ?>
 
 <script>
-// Multi-link preview column updater
-const multiLinkPreviewImage = document.getElementById('multi-link-preview-image');
-if (multiLinkPreviewImage) {
-    document.querySelectorAll('.links-column .preview-btn').forEach(link => {
-        link.addEventListener('mouseenter', (e) => {
-            const previewData = e.target.dataset.preview;
-            if (previewData && previewData.startsWith('data:image')) {
-                multiLinkPreviewImage.src = previewData;
+document.addEventListener('DOMContentLoaded', () => {
+    const previewImage = document.getElementById('multi-link-preview-image');
+    const links = Array.from(document.querySelectorAll('.links-column .preview-btn'));
+
+    if (!previewImage || links.length === 0) return;
+
+    // A queue to manage fetching previews concurrently
+    const queue = [];
+    const maxConcurrent = 1; // Fetch 1 preview at a time to prevent race conditions
+    let inFlight = 0;
+
+    const processQueue = () => {
+        while (inFlight < maxConcurrent && queue.length > 0) {
+            const { link, index, urlId } = queue.shift();
+            inFlight++;
+            
+            fetch(`generate_preview.php?url_id=${urlId}&index=${index}`)
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok.');
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.preview_base64) {
+                        link.dataset.preview = data.preview_base64;
+                        // If this is the first image we've loaded, display it.
+                        if (previewImage.classList.contains('skeleton')) {
+                            previewImage.src = data.preview_base64;
+                            previewImage.classList.remove('skeleton');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to fetch preview for index', index, error);
+                })
+                .finally(() => {
+                    inFlight--;
+                    processQueue();
+                });
+        }
+    };
+
+    // Populate the queue and set initial state
+    let firstPreviewFound = false;
+    links.forEach(link => {
+        const previewData = link.dataset.preview;
+        const index = link.dataset.index;
+        const urlId = link.dataset.urlId;
+
+        if (previewData) {
+            // If we already have a preview, and it's the first one, show it.
+            if (!firstPreviewFound) {
+                previewImage.src = previewData;
+                previewImage.classList.remove('skeleton');
+                firstPreviewFound = true;
+            }
+        } else {
+            // Otherwise, add to the queue to be fetched.
+            queue.push({ link, index, urlId });
+        }
+
+        // Add hover event listener
+        link.addEventListener('mouseenter', () => {
+            const currentPreview = link.dataset.preview;
+            if (currentPreview) {
+                previewImage.src = currentPreview;
+                previewImage.classList.remove('skeleton');
             }
         });
     });
-}
+
+    // Start fetching previews from the queue
+    processQueue();
+});
 </script>
 
 <!-- Tambahkan sebelum penutup body -->

@@ -672,8 +672,8 @@ $is_per_code = ($access_mode === 'per_code');
         <label>Original Links *</label>
         <div id="multi-links">
             <div class="link-item">
-                <input type="url" name="original_url[]" placeholder="Enter a link">
-                <input type="text" name="title_public[]" placeholder="Title for this link (optional)" style="margin-top:8px;">
+                <input type="text" name="title_public[]" placeholder="Title for this link (optional)">
+                <input type="url" name="original_url[]" placeholder="Enter a link" style="margin-top:8px;">
             </div>
         </div>
         <button type="button" id="add-link" class="btn" style="margin-top:8px;">+ Add Another Link</button>
@@ -729,8 +729,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const newInput = document.createElement('div');
             newInput.classList.add('link-item');
             newInput.innerHTML = `
-                <input type="url" name="original_url[]" placeholder="Enter a link" style="margin-top:10px;">
-                <input type="text" name="title_public[]" placeholder="Title for this link (optional)" style="margin-top:8px;">
+            <input type="text" name="title_public[]" placeholder="Title for this link (optional)" style="margin-top:10px;">
+                <input type="url" name="original_url[]" placeholder="Enter a link" style="margin-top:8px;">
             `;
             container.appendChild(newInput);
         });
