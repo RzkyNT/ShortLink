@@ -170,7 +170,6 @@ if (empty($preview_base64) && filter_var($target_url, FILTER_VALIDATE_URL)) {
 
 $main_title = $url_data['title'] ?? '';
 $host = parse_url($target_url, PHP_URL_HOST);
-$qr_base64 = $url_data['qr_base64'] ?? '';
 
 // ==================================================
 // 🧠 LOGGING DEVICE, OS, LOKASI, BROWSER, ASN, DLL
@@ -301,7 +300,6 @@ if ($response !== false) {
     }
 }
 
-$conn->close();
 function notFound($msg = "Short URL not found or inactive.") {
     http_response_code(404);
     echo "
@@ -451,14 +449,14 @@ body {
   color: #fff;
   font-family: 'Inter', sans-serif;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
   margin: 0;
+  padding: 40px 20px;
   -webkit-user-select: none;
   user-select: none;
-    overflow-x: hidden;  /* hilangkan scroll horizontal */
-    overflow-y: hidden;
+  overflow-y: hidden !important;
 }
 input, textarea, select, button, [contenteditable] {
   -webkit-user-select: text;
@@ -573,124 +571,201 @@ button,
 html, body {
   touch-action: manipulation;
 }
+h1 {
+    white-space: nowrap;        /* Supaya teks tidak turun ke baris berikutnya */
+    overflow: hidden;           /* Sembunyikan teks yang melewati batas */
+    text-overflow: ellipsis;    /* Tambahkan "..." di akhir teks yang terpotong */
+    max-width: 100%;            /* Pastikan mengikuti lebar div pembungkus */
+    display: block;             /* Pastikan elemen h1 jadi blok penuh */
+  }
+
+  h1 i {
+    margin-right: 8px;          /* Spasi antara ikon dan teks */
+  }
+
+  /* New layout for multi-links */
+  .box.title-box {
+      margin-bottom: 30px;
+      max-width: 900px;
+  }
+  .multi-link-wrapper {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      gap: 30px;
+  }
+  .preview-column {
+      flex: 1.3;
+      position: sticky;
+      top: 40px;
+      align-self: flex-start;
+  }
+  .preview-column img {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      aspect-ratio: 16 / 10;
+      object-fit: cover;
+      background-color: rgba(255,255,255,0.05);
+  }
+  .links-column {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+  }
+  html, body {
+  overflow-x: hidden !important; /* ⛔ sembunyikan scroll horizontal */
+}
+
 </style>
 </head>
 <body>
 
-<div class="box">
 <?php if (!$can_access): ?>
-  <h2><i class="fas fa-lock"></i> Protected Link</h2>
-  <?php if (!empty($error)): ?>
-    <div class="error"><?= htmlspecialchars($error) ?></div>
-  <?php endif; ?>
+  <div class="box">
+    <h2><i class="fas fa-lock"></i> Protected Link</h2>
+    <?php if (!empty($error)): ?>
+      <div class="error"><?= htmlspecialchars($error) ?></div>
+    <?php endif; ?>
 
-  <?php if ($requires_password): ?>
-    <form method="POST">
-      <p>Enter password to access this link:</p>
-      <input type="password" name="access_password" placeholder="Password" required>
-      <button type="submit">Access</button>
-    </form>
-  <?php elseif ($requires_code): ?>
-    <form method="POST">
-      <p>Enter your unique access code:</p>
-      <input type="text" name="access_code" placeholder="Unique Code" required>
-      <button type="submit">Access</button>
-    </form>
-  <?php endif; ?>
+    <?php if ($requires_password): ?>
+      <form method="POST">
+        <p>Enter password to access this link:</p>
+        <input type="password" name="access_password" placeholder="Password" required>
+        <button type="submit">Access</button>
+      </form>
+    <?php elseif ($requires_code): ?>
+      <form method="POST">
+        <p>Enter your unique access code:</p>
+        <input type="text" name="access_code" placeholder="Unique Code" required>
+        <button type="submit">Access</button>
+      </form>
+    <?php endif; ?>
+    <?php else: ?>
+    <?php
+    // This block contains all the PHP logic to prepare variables
+    $urls = json_decode($url_data['original_url'] ?? '[]', true);
+    $urls = is_array($urls) ? $urls : [];
+    $count = count($urls);
+    $is_multi = $count > 1;
 
-<?php else: ?>
-<?php
-  // Decode JSON array selalu (untuk mode multi-link / public)
-  $urls = json_decode($url_data['original_url'] ?? '[]', true);
-  $urls = is_array($urls) ? $urls : [];
-  $count = count($urls);
-  $is_multi = $count > 1;
+    if ($is_multi) {
+      $updated_urls_for_db = false;
+      foreach ($urls as $key => &$link_item) {
+          if (empty($link_item['preview_base64']) && !empty($link_item['url']) && filter_var($link_item['url'], FILTER_VALIDATE_URL)) {
+              $api_url = 'https://api.screenshotone.com/take';
+              $query = [
+                  'access_key' => 'duAaHYw2b-sumg',
+                  'url' => $link_item['url'],
+                  'viewport_device' => 'galaxy_s5_landscape',
+                  'format' => 'jpg',
+                  'block_ads' => 'true',
+                  'block_cookie_banners' => 'true',
+                  'block_banners_by_heuristics' => 'false',
+                  'block_trackers' => 'true',
+                  'delay' => '0',
+                  'timeout' => '60',
+                  'response_type' => 'json',
+                  'image_quality' => '80',
+              ];
+              $full_url = $api_url . '?' . http_build_query($query);
+              $context = stream_context_create(['http' => ['timeout' => 10]]);
+              $response = @file_get_contents($full_url, false, $context);
+              if ($response !== false) {
+                  $data = json_decode($response, true);
+                  if (!empty($data['screenshot_url'])) {
+                      $image_data = @file_get_contents($data['screenshot_url']);
+                      if ($image_data !== false) {
+                          $link_item['preview_base64'] = 'data:image/jpeg;base64,' . base64_encode($image_data);
+                          $updated_urls_for_db = true;
+                      }
+                  }
+              }
+          }
+      }
+      unset($link_item);
+      if ($updated_urls_for_db) {
+          $updated_json = json_encode($urls);
+          $update_stmt = $conn->prepare("UPDATE urls SET original_url = ? WHERE id = ?");
+          $update_stmt->bind_param("si", $updated_json, $url_data['id']);
+          $update_stmt->execute();
+          $update_stmt->close();
+      }
+    }
 
-  // 🔧 Prioritaskan target_url dari tabel url_codes jika ada (mode per_code)
-  if (!empty($code_data['target_url'])) {
-      $single_target = $code_data['target_url'];
-      // Jika ada judul khusus di code_data, gunakan, jika tidak fallback ke participant_name atau default
-      $single_title = $code_data['target_title'] 
-          ?? $code_data['participant_name'] 
-          ?? 'Click here!';
-  } 
-  // 🔧 Jika tidak ada target_url per_code, pakai data dari original_url
-  elseif (!empty($urls)) {
-      $single_target = $urls[0]['url'] ?? '#';
-      $single_title = $urls[0]['title'] ?? 'Click here!';
-  } 
-  // 🔧 Fallback terakhir (tidak ada data valid)
-  else {
-      $single_target = $target_url ?? '#';
-      $single_title = 'Click here!';
-  }
+    if (!empty($code_data['target_url'])) {
+        $single_target = $code_data['target_url'];
+        $single_title = $code_data['target_title'] ?? $code_data['participant_name'] ?? 'Click here!';
+    } elseif (!empty($urls) && !$is_multi) { // Adjusted for single link from original_url
+        $single_target = $urls[0]['url'] ?? '#';
+        $single_title = $urls[0]['title'] ?? 'Click here!';
+    } else if ($is_multi) {
+        // For multi-link, these are not used, but let's not leave them empty
+        $single_target = '#';
+        $single_title = '';
+    } else {
+        $single_target = $target_url ?? '#';
+        $single_title = 'Click here!';
+    }
+    $host_name = parse_url($single_target, PHP_URL_HOST) ?? "Link";?>
 
-  // Deteksi nama host
-  $host_name = parse_url($single_target, PHP_URL_HOST) ?? "Link";
-?>
-
-  <h1><i class="fas fa-external-link-alt"></i>
-    <?= $is_multi ?  htmlspecialchars($main_title) :  htmlspecialchars($host ?? $target_url) ?>
-  </h1>
-  <p style="color:#a5b4fc;word-break:break-all;">
-    <?= $is_multi ? 'Choose to visit' : 'Ready to visit'?></p>
-  <?php if (!empty($preview_base64)): ?>
-<div style="margin-top:25px;">
-  <img src="<?= $preview_base64 ?>" width="100%" style="border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.4);">
-  <p style="font-size:12px;color:#888;">Preview website tujuan</p>
-</div>
-<?php endif; ?>
-  <div class="result-container">
-<?php if ($is_multi): ?>
-    <div class="multi-links">
-        <?php foreach ($urls as $u): ?>
-            <div class="link-item" style="margin:10px 0;">
-                <a href="<?= htmlspecialchars($u['url']) ?>" class="btn" target="_blank">
+    <?php if ($is_multi): ?>
+    <div class="box title-box">
+      <h1><i class="fas fa-external-link-alt"></i> <?= htmlspecialchars($main_title) ?></h1>
+      <p style="color:#a5b4fc;word-break:break-all;">Choose a destination to visit</p>
+    <div class="multi-link-wrapper">
+        <div class="preview-column">
+            <img id="multi-link-preview-image" src="<?= $urls[0]['preview_base64'] ?? 'favicon.png' ?>" alt="Link preview">
+        </div>
+        <div class="links-column">
+            <?php foreach ($urls as $u): ?>
+                <a href="<?= htmlspecialchars($u['url']) ?>" class="btn preview-btn" target="_blank" data-preview="<?= $u['preview_base64'] ?? '' ?>">
                     <?= htmlspecialchars($u['title'] ?: $u['url']) ?>
                 </a>
-            </div>
-        <?php endforeach; ?>
+            <?php endforeach; ?>
+        </div>
     </div>
-<?php else: ?>
-    <a href="<?= htmlspecialchars($single_target ?? $target_url) ?>" class="btn"><?= htmlspecialchars($single_title ?? 'Click here!') ?></a>
-<?php endif; ?> <!-- <-- INI HARUS DITAMBAHKAN -->
-</div> <!-- result-container -->
+    <?php else: // Single link layout ?>
+    <div class="box">
+      <h1><i class="fas fa-external-link-alt"></i> <?= htmlspecialchars($host ?? $target_url) ?></h1>
+      <p style="color:#a5b4fc;word-break:break-all;">Ready to visit</p>
+      
+      <?php if (!empty($preview_base64)): ?>
+        <div style="margin-top:25px;">
+          <img src="<?= $preview_base64 ?>" width="100%" style="border-radius:12px; box-shadow:0 0 20px rgba(0,0,0,0.4);">
+          <p style="font-size:12px;color:#888;">Website preview</p>
+        </div>
+      <?php endif; ?>
 
+      <div class="result-container" style="margin-top: 25px;">
+          <a href="<?= htmlspecialchars($single_target ?? $target_url) ?>" class="btn"><?= htmlspecialchars($single_title ?? 'Click here!') ?></a>
+      </div>
+    </div>
+    <?php endif; ?>  
+  </div>
+
+<?php endif; ?>
 
 <footer class="branding">
   🔗 Shortened with <a href="<?= BASE_URL ?? 'index.php' ?>">URL Shortener</a>
   <span style="color:#aaa;"> by <strong style="color:#fff;">Rzky.NT</strong></span>
 </footer>
 
-<!-- Modal QR untuk multi-link -->
-<div id="qrModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
-background:rgba(0,0,0,0.7); justify-content:center; align-items:center;">
-  <div style="background:#111; padding:20px; border-radius:12px; text-align:center;">
-    <h3 id="qrTitle" style="color:#fff; margin-bottom:10px;"></h3>
-     <a id="qrImage" href="<?= $qr_base64 ?>" download="Qr <?= preg_replace('/[^a-zA-Z0-9-_]/','_', $url_data['title'] ?? $short_code) ?>.png">
-    <img id="qrImage" src="<?= $qr_base64 ?>" style="width:200px; height:200px; border-radius:12px;">
-    </a>
-    <p style="font-size:12px;color:#888;">Klik QR untuk download</p>
-    <button onclick="document.getElementById('qrModal').style.display='none';" 
-      style="margin-top:15px;padding:8px 16px;border:none;border-radius:8px;">Close</button>
-  </div>
-</div>
-
-<?php endif; ?>
-<script>
-window.addEventListener('DOMContentLoaded', () => {
-    <?php if ($is_multi && !empty($qr_base64)): ?>
-        // Tampilkan QR hanya untuk multi-link
-        showQR("<?= htmlspecialchars($main_title ?? 'QR Code') ?>", "<?= $qr_base64 ?>");
-    <?php endif; ?>
-});
-</script>
+<?php $conn->close(); ?>
 
 <script>
-function showQR(title, qrBase64){
-  document.getElementById('qrTitle').innerText = title;
-  document.getElementById('qrImage').src = qrBase64;
-  document.getElementById('qrModal').style.display = 'flex';
+// Multi-link preview column updater
+const multiLinkPreviewImage = document.getElementById('multi-link-preview-image');
+if (multiLinkPreviewImage) {
+    document.querySelectorAll('.links-column .preview-btn').forEach(link => {
+        link.addEventListener('mouseenter', (e) => {
+            const previewData = e.target.dataset.preview;
+            if (previewData && previewData.startsWith('data:image')) {
+                multiLinkPreviewImage.src = previewData;
+            }
+        });
+    });
 }
 </script>
 
