@@ -536,6 +536,128 @@ input[type="datetime-local"]:not([value]):valid::-webkit-datetime-edit-minute-fi
     transition: all 0.3s ease;
 }
 
+/* --- New Success Layout Styles --- */
+.success-container {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(79, 209, 197, 0.3);
+}
+.result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0,0,0,0.25);
+    padding: 12px 18px;
+    border-radius: 10px;
+    margin-bottom: 25px;
+}
+.result-header .url-text {
+    font-family: monospace;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    word-break: break-all;
+}
+.copy-btn {
+    background: #4fd1c5;
+    color: #0f111a;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+    margin-left: 15px;
+}
+.copy-btn:hover {
+    background: #fff;
+    transform: scale(1.05);
+}
+.result-body {
+    display: flex;
+    gap: 30px;
+}
+.qr-section {
+    flex: 0 0 160px;
+    text-align: center;
+}
+.qr-section img {
+    width: 100%;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border: 3px solid rgba(255,255,255,0.1);
+}
+.details-section {
+    flex: 1;
+    min-width: 0; /* Prevents flex item from overflowing */
+}
+.details-section h4 {
+    margin-bottom: 12px;
+    color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    padding-bottom: 10px;
+    font-size: 18px;
+}
+.details-list {
+    list-style: none;
+    padding: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 10px; /* For scrollbar */
+}
+.details-list::-webkit-scrollbar {
+    width: 6px;
+}
+.details-list::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.2);
+    border-radius: 3px;
+}
+.details-list::-webkit-scrollbar-thumb {
+    background: #4fd1c5;
+    border-radius: 3px;
+}
+.details-list li {
+    margin-bottom: 15px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+.details-list li strong {
+    color: #a5b4fc;
+    display: block;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+.details-list li span, .details-list li a {
+    color: #ccc;
+    word-break: break-all;
+    text-decoration: none;
+}
+.details-list li a:hover {
+    color: #4fd1c5;
+    text-decoration: underline;
+}
+
+@media (max-width: 700px) {
+    .result-body {
+        flex-direction: column;
+    }
+    .qr-section {
+        flex: 1;
+        margin-bottom: 20px;
+        max-width: 200px;
+        align-self: center;
+    }
+    .result-header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
+    }
+    .copy-btn {
+        margin-left: 0;
+    }
+}
+
 
     /* 🔒 Nonaktifkan seleksi teks di seluruh halaman */
 body {
@@ -578,64 +700,64 @@ html, body {
 
 <?php if ($success): ?>
     <div class="success">
-        <?= htmlspecialchars($success) ?><br>
+        <?= htmlspecialchars($success) ?>
 
-        <div class="created-url" style="margin-top:12px;">
-         <?php
-$links = json_decode($original_url, true);
-$is_per_code = ($access_mode === 'per_code');
-?>
-<?php if (!empty($links) || $is_per_code): ?>
-    <ul style="list-style:none;padding-left:0;">
-
-        <?php if ($is_per_code): ?>
-            <li>
-                <span id="createdUrl"><?= htmlspecialchars($created_url) ?></span>
-                <button class="copy-btn">Copy</button>
-                <br>
-                <strong>Participants:</strong>
-                <ul>
-                    <?php foreach ($_POST['participants'] as $p): ?>
-                        <li>
-                            <?= htmlspecialchars($p['name']) ?> 
-                            — Code: <b><?= htmlspecialchars($p['code']) ?></b><br>
-                            Target: <a href="<?= htmlspecialchars($p['target_url']) ?>" target="_blank" style="color:#a5b4fc;">
-                                <?= htmlspecialchars($p['target_url']) ?>
-                            </a>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            </li>
-
-        <?php else: ?>
-            <?php foreach ($links as $l): ?>
-                <li>
-                    <span id="createdUrl"><?= htmlspecialchars($created_url) ?></span>
-                    <button class="copy-btn">Copy</button><br>
-                    <strong><?= htmlspecialchars($l['title']) ?>:</strong> 
-                    <a href="<?= htmlspecialchars($l['url']) ?>" target="_blank" style="color:#a5b4fc; text-decoration: none;">
-                        <?= htmlspecialchars($l['url']) ?>
-                    </a>
-                </li>
-            <?php endforeach; ?>
-        <?php endif; ?>
-    </ul>
-<?php endif; ?>
-
-
-        <?php if ($qr_base64): ?>
-            <div style="margin-top:15px;text-align:center;">
-                <p>Scan QR:</p>
-                <img src="<?= $qr_base64 ?>" width="150" style="border-radius: 15px;">
-                <br><br>
-                <a href="<?= $qr_base64 ?>" 
-                   download="<?= 'Qr_' . preg_replace('/[^a-zA-Z0-9-_]/', '_', $title ?: $short_code) ?>.png" 
-                   class="btn" 
-                   style="background:#4fd1c5;">
-                    <i class="fa-solid fa-download"></i> Download QR
-                </a>
+        <div class="success-container">
+            <div class="result-header">
+                <span class="url-text" id="createdUrl"><?= htmlspecialchars($created_url) ?></span>
+                <button class="copy-btn"><i class="fa-solid fa-copy"></i> Copy</button>
             </div>
-        <?php endif; ?>
+
+            <div class="result-body">
+                <?php if ($qr_base64): ?>
+                <div class="qr-section" style="text-align:center;">
+                    <a href="<?= $qr_base64 ?>" 
+                    download="<?= 'Qr_' . preg_replace('/[^a-zA-Z0-9-_]/', '_', $title ?: $short_code) ?>.png">
+                        <img src="<?= $qr_base64 ?>" 
+                            alt="QR Code" 
+                            style="width:100%; cursor:pointer;">
+                    </a>
+
+                    <h6 style="margin-top:8px; font-weight:600; color:#ddd;">
+                        Klik gambar untuk download
+                    </h6>
+                </div>
+                <?php endif; ?>
+
+                <div class="details-section">
+                    <?php
+                    $links = json_decode($original_url, true);
+                    $is_per_code = ($access_mode === 'per_code');
+                    ?>
+                    <?php if ($is_per_code && !empty($_POST['participants'])): ?>
+                        <h4>Participants</h4>
+                        <ul class="details-list">
+                            <?php foreach ($_POST['participants'] as $p): if(empty(trim($p['name']))) continue; ?>
+                                <li>
+                                    <strong><?= htmlspecialchars($p['name']) ?></strong>
+                                    <span>Code: <b><?= htmlspecialchars($p['code']) ?></b></span>
+                                    <a href="<?= htmlspecialchars($p['target_url']) ?>" target="_blank">
+                                        <?= htmlspecialchars($p['target_url']) ?>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php elseif (!empty($links)): ?>
+                        <h4>Target Links</h4>
+                        <ul class="details-list">
+                            <?php foreach ($links as $l): ?>
+                                <li>
+                                    <strong><?= htmlspecialchars($l['title']) ?></strong>
+                                    <a href="<?= htmlspecialchars($l['url']) ?>" target="_blank">
+                                        <?= htmlspecialchars($l['url']) ?>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
     </div>
 <?php endif; ?>
 
@@ -701,22 +823,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /* === COPY URL FUNCTION === */
     document.body.addEventListener('click', e => {
-        if (!e.target.classList.contains('copy-btn')) return;
+        const copyBtn = e.target.closest('.copy-btn');
+        if (!copyBtn) return;
 
-        const span = e.target.closest('li')?.querySelector('#createdUrl');
-        if (!span) return;
+        const urlSpan = document.getElementById('createdUrl');
+        if (!urlSpan) return;
 
-        const urlText = span.textContent.trim();
+        const urlText = urlSpan.textContent.trim();
         if (!urlText) return;
 
         navigator.clipboard.writeText(urlText).then(() => {
-            const btn = e.target;
-            const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
-            btn.style.background = '#3ccf5a';
+            const originalContent = copyBtn.innerHTML;
+            const originalBg = copyBtn.style.background;
+            copyBtn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+            copyBtn.style.background = '#3ccf5a';
+            copyBtn.disabled = true;
             setTimeout(() => {
-                btn.innerHTML = original;
-                btn.style.background = '#28a745';
+                copyBtn.innerHTML = originalContent;
+                copyBtn.style.background = originalBg;
+                copyBtn.disabled = false;
             }, 2000);
         });
     });
