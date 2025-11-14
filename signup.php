@@ -63,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="favicon.png">
+    <script src="assets/sweetalert2.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -157,6 +158,18 @@ html, body {
   touch-action: manipulation;
 }
 
+.swal2-popup {
+    background: #1a1c25 !important;
+    color: #fff !important;
+    border-radius: 12px !important;
+}
+.swal2-title {
+    color: #fff !important;
+}
+.swal2-html-container {
+    color: #ccc !important;
+}
+
     </style>
 </head>
 <body>
@@ -193,5 +206,39 @@ html, body {
             <a href="login.php">Already have an account? Login here</a>
         </div>
     </div>
+
+    <?php if ($error): ?>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        Swal.fire({
+            title: 'Signup Failed',
+            text: '<?= htmlspecialchars($error) ?>',
+            icon: 'error',
+            confirmButtonColor: '#667eea'
+        });
+        const errorDiv = document.querySelector('.error');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+        }
+    });
+    </script>
+    <?php elseif ($success): ?>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        Swal.fire({
+            title: 'Success!',
+            text: '<?= htmlspecialchars($success) ?>',
+            icon: 'success',
+            confirmButtonColor: '#667eea'
+        }).then(() => {
+            window.location.href = 'login.php';
+        });
+        const successDiv = document.querySelector('.success');
+        if (successDiv) {
+            successDiv.style.display = 'none';
+        }
+    });
+    </script>
+    <?php endif; ?>
 </body>
 </html>

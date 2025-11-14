@@ -90,6 +90,7 @@ $conn->close();
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.min.css" />
 
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -259,6 +260,43 @@ a {
   max-width: 100%;
 }
 
+/* DataTables Dark Theme Overrides */
+.dt-search input, .dt-input {
+    background-color: rgba(0,0,0,0.3) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 6px;
+    margin-left: 5px;
+}
+.dt-search label, .dt-length label {
+    color: #aaa;
+}
+.dt-length select {
+    background-color: rgba(0,0,0,0.3) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 6px;
+    margin: 0 5px;
+}
+.dt-info {
+    color: #aaa !important;
+}
+.dt-paging .dt-paging-button {
+    background: rgba(255,255,255,0.1) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    color: #fff !important;
+    border-radius: 4px;
+    margin: 0 2px;
+}
+.dt-paging .dt-paging-button.current, .dt-paging .dt-paging-button:hover {
+    background: #667eea !important;
+    color: #fff !important;
+    border-color: #667eea !important;
+}
+.dt-layout-row {
+    padding: 10px 0;
+}
+
 </style>
 </head>
 <body>
@@ -344,11 +382,15 @@ a {
         <div class="card">
             <div class="section-title"><i class="fas fa-globe"></i> Top Referrers</div>
             <?php if ($top_ref->num_rows > 0): ?>
-            <table>
-                <tr><th>Referrer</th><th>Clicks</th></tr>
-                <?php while ($r = $top_ref->fetch_assoc()): ?>
-                    <tr><td><?= htmlspecialchars($r['referer']) ?></td><td><?= $r['count'] ?></td></tr>
-                <?php endwhile; ?>
+            <table id="referrersTable" class="display" style="width:100%">
+                <thead>
+                    <tr><th>Referrer</th><th>Clicks</th></tr>
+                </thead>
+                <tbody>
+                    <?php while ($r = $top_ref->fetch_assoc()): ?>
+                        <tr><td><?= htmlspecialchars($r['referer']) ?></td><td><?= $r['count'] ?></td></tr>
+                    <?php endwhile; ?>
+                </tbody>
             </table>
             <?php else: ?>
                 <p style="color:#aaa;">No referrer data yet.</p>
@@ -359,39 +401,43 @@ a {
         <div class="section-title"><i class="fas fa-clock"></i> Recent Clicks (Detailed)</div>
         <?php if ($recent_clicks->num_rows > 0): ?>
         <div style="overflow-x:auto;">
-        <table>
-            <tr>
-                <th>Date</th>
-                <th>IP</th>
-                <th>Region</th>
-                <th>Postal</th>
-                <th>Timezone</th>
-                <th>Device</th>
-                <th>Browser</th>
-                <th>OS</th>
-                <th>Org</th>
-                <th>ASN</th>
-                <th>Lat</th>
-                <th>Lon</th>
-                <th>Referrer</th>
-            </tr>
-            <?php while ($c = $recent_clicks->fetch_assoc()): ?>
+        <table id="clicksTable" class="display" style="width:100%">
+            <thead>
                 <tr>
-                    <td><?= htmlspecialchars($c['clicked_at']) ?></td>
-                    <td><?= htmlspecialchars($c['ip_address']) ?></td>
-                    <td><?= htmlspecialchars($c['region'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($c['postal'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($c['timezone'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($c['device_type'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($c['browser'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($c['os'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($c['org'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($c['asn'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($c['latitude'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($c['longitude'] ?? '-') ?></td>
-                    <td><?= $c['referer'] ? htmlspecialchars($c['referer']) : 'Direct' ?></td>
+                    <th>Date</th>
+                    <th>IP</th>
+                    <th>Region</th>
+                    <th>Postal</th>
+                    <th>Timezone</th>
+                    <th>Device</th>
+                    <th>Browser</th>
+                    <th>OS</th>
+                    <th>Org</th>
+                    <th>ASN</th>
+                    <th>Lat</th>
+                    <th>Lon</th>
+                    <th>Referrer</th>
                 </tr>
-            <?php endwhile; ?>
+            </thead>
+            <tbody>
+                <?php while ($c = $recent_clicks->fetch_assoc()): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($c['clicked_at']) ?></td>
+                        <td><?= htmlspecialchars($c['ip_address']) ?></td>
+                        <td><?= htmlspecialchars($c['region'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($c['postal'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($c['timezone'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($c['device_type'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($c['browser'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($c['os'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($c['org'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($c['asn'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($c['latitude'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($c['longitude'] ?? '-') ?></td>
+                        <td><?= $c['referer'] ? htmlspecialchars($c['referer']) : 'Direct' ?></td>
+                    </tr>
+                <?php endwhile; ?>
+            </tbody>
             </table>
             <?php else: ?>
                 <p style="color:#aaa;">No clicks recorded yet.</p>
@@ -399,7 +445,21 @@ a {
         </div>
     </div>
 
-    <script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js"></script>
+<script src="assets/sweetalert2.js"></script>
+<script>
+$(document).ready(function() {
+    $('#referrersTable').DataTable({
+        "order": [[ 1, "desc" ]],
+        responsive: true
+    });
+    $('#clicksTable').DataTable({
+        "order": [[ 0, "desc" ]],
+        responsive: true
+    });
+});
+
 const ctx = document.getElementById('clickChart');
 let clickChart;
 
@@ -407,9 +467,14 @@ let clickChart;
 const chartData = {
     labels: [<?php
         $dates = []; $clicks = [];
-        while ($row = $clicks_data->fetch_assoc()) {
-            $dates[] = '"' . date('M d', strtotime($row['date'])) . '"';
-            $clicks[] = $row['clicks'];
+        // Reset pointer and re-fetch if necessary, or clone the result before the first loop.
+        // For simplicity, we assume the data is available or re-fetched if needed.
+        // A better approach would be to store data in an array first.
+        if (mysqli_data_seek($clicks_data, 0)) {
+            while ($row = $clicks_data->fetch_assoc()) {
+                $dates[] = '"' . date('M d', strtotime($row['date'])) . '"';
+                $clicks[] = $row['clicks'];
+            }
         }
         echo implode(',', $dates);
     ?>],
@@ -465,7 +530,16 @@ filterSelect.addEventListener('change', () => {
 });
 
 applyBtn.addEventListener('click', () => {
-    if (!startDate.value || !endDate.value) return alert('Please select both start and end date');
+    if (!startDate.value || !endDate.value) {
+        Swal.fire({
+            title: 'Incomplete Date Range',
+            text: 'Please select both start and end date.',
+            icon: 'warning',
+            background: '#1a1c25',
+            color: '#fff'
+        });
+        return;
+    }
     loadChartData('custom', startDate.value, endDate.value);
 });
 
@@ -478,7 +552,16 @@ function loadChartData(filter, start = '', end = '') {
             document.querySelectorAll('.stat-card .number')[0].textContent = data.total_clicks;
             document.querySelectorAll('.stat-card .number')[1].textContent = data.unique_visitors;
         })
-        .catch(err => console.error(err));
+        .catch(err => {
+            console.error(err);
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to load chart data.',
+                icon: 'error',
+                background: '#1a1c25',
+                color: '#fff'
+            });
+        });
 }
 </script>
 

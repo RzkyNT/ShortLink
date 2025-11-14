@@ -45,7 +45,8 @@ $stats = $stats_result->fetch_assoc();
     <title>Dashboard - URL Shortener</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="icon" type="image/png" href="favicon.png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.min.css" />
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -351,6 +352,43 @@ td[data-label="Original URL"] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* DataTables Dark Theme Overrides */
+.dt-search input, .dt-input {
+    background-color: rgba(0,0,0,0.3) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 6px;
+    margin-left: 5px;
+}
+.dt-search label, .dt-length label {
+    color: #aaa;
+}
+.dt-length select {
+    background-color: rgba(0,0,0,0.3) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    border-radius: 6px;
+    margin: 0 5px;
+}
+.dt-info {
+    color: #aaa !important;
+}
+.dt-paging .dt-paging-button {
+    background: rgba(255,255,255,0.1) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    color: #fff !important;
+    border-radius: 4px;
+    margin: 0 2px;
+}
+.dt-paging .dt-paging-button.current, .dt-paging .dt-paging-button:hover {
+    background: #667eea !important;
+    color: #fff !important;
+    border-color: #667eea !important;
+}
+.dt-layout-row {
+    padding: 10px;
+}
     </style>
 </head>
 <body>
@@ -388,7 +426,7 @@ td[data-label="Original URL"] {
         </div>
 
         <div class="urls-table">
-            <table>
+            <table id="urlsDashboardTable" class="display" style="width:100%">
                 <thead>
                     <tr>
                         <th>Short Code</th>
@@ -447,22 +485,20 @@ td[data-label="Original URL"] {
                             <td data-label="Actions">
                                 <div class="action-btns">
                                     <a href="analytics.php?id=<?= $row['id'] ?>" class="action-btn btn-view">
-                                        <i class="fa-solid fa-chart-line"></i> View
+                                        <i class="fa-solid fa-chart-line"></i>
                                     </a>
                                     <a href="edit.php?id=<?= $row['id'] ?>" class="action-btn btn-edit">
-                                        <i class="fa-solid fa-pen"></i> Edit
+                                        <i class="fa-solid fa-pen"></i>
                                     </a>
-                                    <a href="delete.php?id=<?= $row['id'] ?>"
-                                    onclick="return confirm('Are you sure you want to delete this URL?')"
-                                    class="action-btn btn-delete">
-                                        <i class="fa-solid fa-trash"></i> Delete
+                                    <a href="delete.php?id=<?= $row['id'] ?>" class="action-btn btn-delete delete-link">
+                                        <i class="fa-solid fa-trash"></i>
                                     </a>
                                    <?php if (!empty($row['qr_base64'])): ?>
                                         <a href="#"
                                         type="button"
                                         class="action-btn btn-qrcode"
                                         onclick="showQR('<?= $row['qr_base64'] ?>', '<?= BASE_URL . $row['short_code'] ?>')">
-                                            <i class="fa-solid fa-qrcode"></i> QR
+                                            <i class="fa-solid fa-qrcode"></i>
                                         </a>
                                     <?php endif; ?>
                                 </div>
@@ -499,7 +535,41 @@ td[data-label="Original URL"] {
         </div>
 
 
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js"></script>
+<script src="assets/sweetalert2.js"></script>
 <script>
+$(document).ready(function() {
+    $('#urlsDashboardTable').DataTable({
+        "order": [[ 5, "desc" ]], // Order by created date descending
+        "pageLength": 10,
+        responsive: true
+    });
+});
+
+document.addEventListener('click', function(e) {
+    const deleteLink = e.target.closest('.delete-link');
+    if (deleteLink) {
+        e.preventDefault();
+        const deleteUrl = deleteLink.href;
+        Swal.fire({
+            title: 'Are you sure?',
+            text: "You won't be able to revert this!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#667eea',
+            cancelButtonColor: '#dc3545',
+            confirmButtonText: 'Yes, delete it!',
+            background: '#1a1c25',
+            color: '#fff'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                window.location.href = deleteUrl;
+            }
+        })
+    }
+});
+
  function copyUrl(url, btn) {
     navigator.clipboard.writeText(url).then(() => {
         const original = btn.innerHTML;
@@ -513,7 +583,13 @@ td[data-label="Original URL"] {
         }, 2000);
     }).catch(err => {
         console.error("Copy failed:", err);
-        alert("Gagal menyalin URL.");
+        Swal.fire({
+            title: 'Error!',
+            text: 'Failed to copy URL.',
+            icon: 'error',
+            background: '#1a1c25',
+            color: '#fff'
+        });
     });
 }
 
