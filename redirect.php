@@ -127,42 +127,72 @@ if ($requires_code && !empty($code_data['target_url'])) {
     }
 }
 
-// === 📸 AUTO GENERATE PREVIEW JIKA BELUM ADA ===
-$preview_base64 = $url_data['preview_base64'] ?? '';
+// === 📸 AUTO GENERATE PREVIEW JIKA BELUM ADA (LOGIKA BARU) ===
+$preview_base64 = '';
 
-if (empty($preview_base64) && filter_var($target_url, FILTER_VALIDATE_URL)) {
-    $api_url = 'https://api.screenshotone.com/take';
-    $query = [
-        'access_key' => 'duAaHYw2b-sumg',
-        'url' => $target_url,
-        'viewport_device' => 'galaxy_s5_landscape',
-        'format' => 'jpg',
-        'block_ads' => 'true',
-        'block_cookie_banners' => 'true',
-        'block_banners_by_heuristics' => 'false',
-        'block_trackers' => 'true',
-        'delay' => '0',
-        'timeout' => '60',
-        'response_type' => 'json',
-        'image_quality' => '80',
-    ];
-    $full_url = $api_url . '?' . http_build_query($query);
+// Prioritaskan preview dari url_codes jika ada
+if ($requires_code && !empty($code_data)) {
+    $preview_base64 = $code_data['preview_base64'] ?? '';
 
-    $context = stream_context_create(['http' => ['timeout' => 10]]);
-    $response = @file_get_contents($full_url, false, $context);
+    // Jika preview di url_codes kosong, generate dan simpan
+    if (empty($preview_base64) && filter_var($target_url, FILTER_VALIDATE_URL)) {
+        $api_url = 'https://api.screenshotone.com/take';
+        $query = [
+            'access_key' => 'duAaHYw2b-sumg', 'url' => $target_url, 'viewport_device' => 'galaxy_s5_landscape',
+            'format' => 'jpg', 'block_ads' => 'true', 'block_cookie_banners' => 'true',
+            'block_banners_by_heuristics' => 'false', 'block_trackers' => 'true', 'delay' => '0',
+            'timeout' => '60', 'response_type' => 'json', 'image_quality' => '80',
+        ];
+        $full_url = $api_url . '?' . http_build_query($query);
+        $context = stream_context_create(['http' => ['timeout' => 10]]);
+        $response = @file_get_contents($full_url, false, $context);
 
-    if ($response !== false) {
-        $data = json_decode($response, true);
-        if (!empty($data['screenshot_url'])) {
-            $image_data = @file_get_contents($data['screenshot_url']);
-            if ($image_data !== false) {
-                $preview_base64 = 'data:image/jpeg;base64,' . base64_encode($image_data);
+        if ($response !== false) {
+            $data = json_decode($response, true);
+            if (!empty($data['screenshot_url'])) {
+                $image_data = @file_get_contents($data['screenshot_url']);
+                if ($image_data !== false) {
+                    $preview_base64 = 'data:image/jpeg;base64,' . base64_encode($image_data);
+                    // Simpan ke DB (url_codes) agar tidak perlu ambil ulang
+                    $stmt = $conn->prepare("UPDATE url_codes SET preview_base64 = ? WHERE id = ?");
+                    $stmt->bind_param("si", $preview_base64, $code_data['id']);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
+        }
+    }
+}
 
-                // Simpan ke DB agar tidak perlu ambil ulang
-                $stmt = $conn->prepare("UPDATE urls SET preview_base64 = ? WHERE id = ?");
-                $stmt->bind_param("si", $preview_base64, $url_data['id']);
-                $stmt->execute();
-                $stmt->close();
+// Jika tidak ada preview dari url_codes, coba dari urls (link utama)
+if (empty($preview_base64)) {
+    $preview_base64 = $url_data['preview_base64'] ?? '';
+
+    // Jika preview di urls kosong, generate dan simpan
+    if (empty($preview_base64) && filter_var($target_url, FILTER_VALIDATE_URL)) {
+        $api_url = 'https://api.screenshotone.com/take';
+        $query = [
+            'access_key' => 'duAaHYw2b-sumg', 'url' => $target_url, 'viewport_device' => 'galaxy_s5_landscape',
+            'format' => 'jpg', 'block_ads' => 'true', 'block_cookie_banners' => 'true',
+            'block_banners_by_heuristics' => 'false', 'block_trackers' => 'true', 'delay' => '0',
+            'timeout' => '60', 'response_type' => 'json', 'image_quality' => '80',
+        ];
+        $full_url = $api_url . '?' . http_build_query($query);
+        $context = stream_context_create(['http' => ['timeout' => 10]]);
+        $response = @file_get_contents($full_url, false, $context);
+
+        if ($response !== false) {
+            $data = json_decode($response, true);
+            if (!empty($data['screenshot_url'])) {
+                $image_data = @file_get_contents($data['screenshot_url']);
+                if ($image_data !== false) {
+                    $preview_base64 = 'data:image/jpeg;base64,' . base64_encode($image_data);
+                    // Simpan ke DB (urls) agar tidak perlu ambil ulang
+                    $stmt = $conn->prepare("UPDATE urls SET preview_base64 = ? WHERE id = ?");
+                    $stmt->bind_param("si", $preview_base64, $url_data['id']);
+                    $stmt->execute();
+                    $stmt->close();
+                }
             }
         }
     }
@@ -514,6 +544,11 @@ button:hover, .btn:hover {
   background: linear-gradient(135deg, #5568d3, #2e4ed8ff);
   box-shadow: 0 0 10px rgba(102,126,234,0.5);
 }
+.btn.selected {
+  background: linear-gradient(135deg, #5568d3, #2e4ed8ff);
+  box-shadow: 0 0 12px rgba(102,126,234,0.6);
+  transform: scale(1.02);
+}
 .error {
   color: #ff6b6b;
   margin-bottom: 15px;
@@ -733,34 +768,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!previewImage || links.length === 0) return;
 
-    // A queue to manage fetching previews concurrently
+    // --- Preview Fetching Queue ---
     const queue = [];
-    const maxConcurrent = 1; // Fetch 1 preview at a time to prevent race conditions
+    const maxConcurrent = 1;
     let inFlight = 0;
 
     const processQueue = () => {
         while (inFlight < maxConcurrent && queue.length > 0) {
             const { link, index, urlId } = queue.shift();
             inFlight++;
-            
             fetch(`generate_preview.php?url_id=${urlId}&index=${index}`)
-                .then(response => {
-                    if (!response.ok) throw new Error('Network response was not ok.');
-                    return response.json();
-                })
+                .then(response => response.ok ? response.json() : Promise.reject('Network response was not ok.'))
                 .then(data => {
                     if (data.preview_base64) {
                         link.dataset.preview = data.preview_base64;
-                        // If this is the first image we've loaded, display it.
                         if (previewImage.classList.contains('skeleton')) {
-                            previewImage.src = data.preview_base64;
-                            previewImage.classList.remove('skeleton');
+                            updatePreview(link);
                         }
                     }
                 })
-                .catch(error => {
-                    console.error('Failed to fetch preview for index', index, error);
-                })
+                .catch(error => console.error('Failed to fetch preview for index', index, error))
                 .finally(() => {
                     inFlight--;
                     processQueue();
@@ -768,36 +795,65 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Populate the queue and set initial state
+    // --- UI Interaction Logic ---
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    let lastTappedLink = null;
+
+    const updatePreview = (linkElement) => {
+        const currentPreview = linkElement.dataset.preview;
+        if (currentPreview && currentPreview !== '') {
+            previewImage.src = currentPreview;
+            previewImage.classList.remove('skeleton');
+        }
+    };
+    
+    const clearSelection = () => {
+        lastTappedLink = null;
+        links.forEach(l => l.classList.remove('selected'));
+    };
+
+    // --- Initialization ---
     let firstPreviewFound = false;
     links.forEach(link => {
+        // Populate fetch queue
         const previewData = link.dataset.preview;
-        const index = link.dataset.index;
-        const urlId = link.dataset.urlId;
-
         if (previewData) {
-            // If we already have a preview, and it's the first one, show it.
             if (!firstPreviewFound) {
-                previewImage.src = previewData;
-                previewImage.classList.remove('skeleton');
+                updatePreview(link);
                 firstPreviewFound = true;
             }
         } else {
-            // Otherwise, add to the queue to be fetched.
-            queue.push({ link, index, urlId });
+            queue.push({ link, index: link.dataset.index, urlId: link.dataset.urlId });
         }
 
-        // Add hover event listener
-        link.addEventListener('mouseenter', () => {
-            const currentPreview = link.dataset.preview;
-            if (currentPreview) {
-                previewImage.src = currentPreview;
-                previewImage.classList.remove('skeleton');
-            }
-        });
+        // Attach event listeners based on device type
+        if (isTouchDevice) {
+            link.addEventListener('click', (e) => {
+                if (link !== lastTappedLink) {
+                    e.preventDefault();
+                    clearSelection();
+                    lastTappedLink = link;
+                    link.classList.add('selected');
+                    updatePreview(link);
+                }
+                // On second tap, lastTappedLink === link, so default navigation occurs
+            });
+        } else {
+            // Desktop behavior: hover to preview, click to go
+            link.addEventListener('mouseenter', () => updatePreview(link));
+        }
     });
 
-    // Start fetching previews from the queue
+    // For touch devices, tapping outside the links should reset the selection
+    if (isTouchDevice) {
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.links-column')) {
+                clearSelection();
+            }
+        }, true); // Use capture to ensure it runs before other clicks might be stopped
+    }
+
+    // Start fetching any missing previews
     processQueue();
 });
 </script>
