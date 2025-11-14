@@ -649,6 +649,18 @@ html, body {
   touch-action: manipulation;
 }
 
+.swal2-popup {
+    background: #1a1c25 !important;
+    color: #fff !important;
+    border-radius: 12px !important;
+}
+.swal2-title {
+    color: #fff !important;
+}
+.swal2-html-container {
+    color: #ccc !important;
+}
+
 </style>
 </head>
 <body>
