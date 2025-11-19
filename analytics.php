@@ -68,7 +68,7 @@ $clicks_data = $conn->query("
 $recent_clicks = $conn->query("
     SELECT * FROM url_clicks 
     WHERE url_id = $url_id 
-    ORDER BY clicked_at DESC LIMIT 15
+    ORDER BY clicked_at DESC
 ");
 
 $top_ref = $conn->query("
@@ -76,7 +76,7 @@ $top_ref = $conn->query("
     FROM url_clicks 
     WHERE url_id = $url_id AND referer IS NOT NULL AND referer != ''
     GROUP BY referer 
-    ORDER BY count DESC LIMIT 10
+    ORDER BY count DESC
 ");
 
 $conn->close();
@@ -398,7 +398,7 @@ a {
         </div>
 
             <div class="card">
-        <div class="section-title"><i class="fas fa-clock"></i> Recent Clicks (Detailed)</div>
+        <div class="section-title"><i class="fas fa-clock"></i> History Clicks (Detailed)</div>
         <?php if ($recent_clicks->num_rows > 0): ?>
         <div style="overflow-x:auto;">
         <table id="clicksTable" class="display" style="width:100%">
