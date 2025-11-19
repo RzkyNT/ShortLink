@@ -316,7 +316,7 @@ a {
             </a>
             </p>
 
-           <p><strong>Original Url:</strong></p>
+            <p><strong>Original Url:</strong></p>
             <div style="margin-top:6px;">
                 <?php
                 $original = $url_data['original_url'] ?? '';
