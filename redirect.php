@@ -127,8 +127,246 @@ if ($requires_code && !empty($code_data['target_url'])) {
     }
 }
 
+// Prepare host for display
+$host = parse_url($target_url, PHP_URL_HOST) ?? $target_url;
 // === 📸 AUTO GENERATE PREVIEW JIKA BELUM ADA (LOGIKA BARU) ===
 $preview_base64 = '';
+
+// Helper: log click + mark one-time used (ke DB + cookie)
+function do_click_actions($conn, $url_data, $short_code, $requires_code = false, $code_data = null) {
+    $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    if ($ip_address === '127.0.0.1' || $ip_address === '::1') {
+        $ip_address = '101.255.140.157'; // fallback IP utk testing localhost
+    }
+
+    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    $referer = $_SERVER['HTTP_REFERER'] ?? '';
+    $timestamp = date('Y-m-d H:i:s');
+
+    // Detect helpers
+    $detectDevice = function($ua) {
+        $ua = strtolower($ua);
+        if (strpos($ua, 'mobile') !== false) return 'Mobile';
+        if (strpos($ua, 'tablet') !== false) return 'Tablet';
+        return 'Desktop';
+    };
+    $detectBrowser = function($ua) {
+        $ua = strtolower($ua);
+        if (strpos($ua, 'chrome') !== false && strpos($ua, 'edg') === false) return 'Chrome';
+        if (strpos($ua, 'firefox') !== false) return 'Firefox';
+        if (strpos($ua, 'safari') !== false && strpos($ua, 'chrome') === false) return 'Safari';
+        if (strpos($ua, 'edg') !== false) return 'Edge';
+        if (strpos($ua, 'opr') !== false || strpos($ua, 'opera') !== false) return 'Opera';
+        return 'Other';
+    };
+    $detectOS = function($ua) {
+        $ua = strtolower($ua);
+        if (strpos($ua, 'windows') !== false) return 'Windows';
+        if (strpos($ua, 'mac') !== false) return 'MacOS';
+        if (strpos($ua, 'android') !== false) return 'Android';
+        if (strpos($ua, 'linux') !== false) return 'Linux';
+        if (strpos($ua, 'iphone') !== false || strpos($ua, 'ipad') !== false) return 'iOS';
+        return 'Other';
+    };
+
+    $device_type = $detectDevice($user_agent);
+    $browser = $detectBrowser($user_agent);
+    $os = $detectOS($user_agent);
+
+    // Geolocation lookup (best-effort)
+    $location = [ 'country'=>'', 'city'=>'', 'region'=>'', 'postal'=>'', 'org'=>'', 'asn'=>'', 'timezone'=>'', 'lat'=>'', 'lon'=>'' ];
+    $api_url = "https://ipwho.is/{$ip_address}";
+    $context = stream_context_create(['http' => ['timeout' => 3]]);
+    $response = @file_get_contents($api_url, false, $context);
+    if ($response !== false) {
+        $data = json_decode($response, true);
+        if (!empty($data) && !empty($data['success'])) {
+            $location['country'] = $data['country'] ?? '';
+            $location['region']  = $data['region'] ?? '';
+            $location['city']    = $data['city'] ?? '';
+            $location['postal']  = $data['postal'] ?? '';
+            $location['org']     = $data['connection']['org'] ?? ($data['connection']['isp'] ?? '');
+            $location['asn']     = $data['connection']['asn'] ?? '';
+            $location['timezone'] = $data['timezone']['id'] ?? '';
+            $location['lat']     = $data['latitude'] ?? '';
+            $location['lon']     = $data['longitude'] ?? '';
+        }
+    } else {
+        $backup = @file_get_contents("https://ipinfo.io/{$ip_address}/json");
+        if ($backup !== false) {
+            $info = json_decode($backup, true);
+            if (!empty($info)) {
+                $location['country'] = $info['country'] ?? '';
+                $location['city'] = $info['city'] ?? '';
+                $location['org'] = $info['org'] ?? '';
+                if (!empty($info['loc'])) list($location['lat'], $location['lon']) = explode(',', $info['loc']);
+            }
+        }
+    }
+
+    // Insert click record
+    $stmt = $conn->prepare("INSERT INTO url_clicks 
+        (url_id, ip_address, user_agent, referer, device_type, browser, os, country, city, region, postal, org, asn, timezone, latitude, longitude, clicked_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param(
+        "issssssssssssssss",
+        $url_data['id'],
+        $ip_address,
+        $user_agent,
+        $referer,
+        $device_type,
+        $browser,
+        $os,
+        $location['country'],
+        $location['city'],
+        $location['region'],
+        $location['postal'],
+        $location['org'],
+        $location['asn'],
+        $location['timezone'],
+        $location['lat'],
+        $location['lon'],
+        $timestamp
+    );
+    $stmt->execute();
+    $stmt->close();
+
+    // One-time handling
+    if ($url_data['one_time'] == 1) {
+        setcookie("visited_" . $short_code, "1", time() + 86400, "/");
+        if (!$requires_code) {
+            $conn->query("UPDATE urls SET status='inactive' WHERE id=" . intval($url_data['id']));
+        }
+    }
+
+    // If per-code and code_data present and one_time, mark code used
+    if ($requires_code && !empty($code_data) && $url_data['one_time'] == 1) {
+        $conn->query("UPDATE url_codes SET used = 1 WHERE id = " . intval($code_data['id']));
+    }
+}
+
+// If the URL (or specific code when using per-code mode) is configured to skip preview,
+// and access is allowed, perform click-logging + immediate redirect.
+$skip_requested = (!empty($url_data['skip_preview']) && $url_data['skip_preview'] == 1)
+               || ($requires_code && !empty($code_data['skip_preview']) && $code_data['skip_preview'] == 1);
+// Track whether click actions (logging/one-time marking) were already performed
+$click_actions_done = false;
+
+if ($can_access && $skip_requested) {
+    // Log click and mark one-time before showing redirect page
+    do_click_actions($conn, $url_data, $short_code, $requires_code, $code_data);
+    $click_actions_done = true;
+
+    // Render a friendly redirect page with meta refresh (3s)
+    ?>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Redirecting...</title>
+        <meta http-equiv="refresh" content="3;url=<?= htmlspecialchars($target_url) ?>">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+                font-family: 'Inter', sans-serif;
+                background: #0f1116;
+                color: #fff;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+            }
+            .redirect-box {
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 16px;
+                padding: 50px 40px;
+                text-align: center;
+                max-width: 420px;
+                animation: fadeIn 0.5s ease;
+            }
+            .redirect-box i {
+                font-size: 40px;
+                color: #667eea;
+                margin-bottom: 20px;
+                animation: spin 2s linear infinite;
+            }
+            .redirect-box h1 {
+                font-size: 24px;
+                margin-bottom: 10px;
+            }
+            .redirect-box p {
+                font-size: 15px;
+                color: #ccc;
+                margin-bottom: 20px;
+            }
+            .target {
+                color: #667eea;
+                font-weight: 600;
+                word-break: break-all;
+            }
+            .progress-bar {
+                width: 100%;
+                height: 6px;
+                background: rgba(255,255,255,0.1);
+                border-radius: 3px;
+                overflow: hidden;
+                margin-top: 10px;
+            }
+            .progress-fill {
+                width: 0%;
+                height: 100%;
+                background: #667eea;
+                animation: fill 3s linear forwards;
+            }
+
+            @keyframes fill {
+                from { width: 0%; }
+                to { width: 100%; }
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            .manual {
+                color: #aaa;
+                font-size: 13px;
+                margin-top: 15px;
+            }
+            .manual a {
+                color: #ffff;
+                text-decoration: none;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="redirect-box">
+            <i class="fa-solid fa-spinner"></i>
+            <h1>Redirecting you...</h1>
+            <p>You're being redirected to:</p>
+            <div class="target"><?= htmlspecialchars($host ?? $target_url) ?></div>
+
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+
+            <div class="manual">
+                Not redirected? <a href="<?= htmlspecialchars($target_url) ?>">Click here</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
 
 // Prioritaskan preview dari url_codes jika ada
 if ($requires_code && !empty($code_data)) {
@@ -199,135 +437,11 @@ if (empty($preview_base64)) {
 }
 
 $main_title = $url_data['title'] ?? '';
-$host = parse_url($target_url, PHP_URL_HOST);
+// $host is already set above, no need to re-parse unless it changed (it didn't)
 
-// ==================================================
-// 🧠 LOGGING DEVICE, OS, LOKASI, BROWSER, ASN, DLL
-// ==================================================
-if ($can_access) {
-    $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-    if ($ip_address === '127.0.0.1' || $ip_address === '::1') {
-        $ip_address = '101.255.140.157'; // fallback IP utk testing localhost
-    }
-
-    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-    $referer = $_SERVER['HTTP_REFERER'] ?? '';
-    $timestamp = date('Y-m-d H:i:s');
-
-    // === DETEKSI DEVICE & OS ===
-    function detectDevice($ua) {
-        $ua = strtolower($ua);
-        if (strpos($ua, 'mobile') !== false) return 'Mobile';
-        if (strpos($ua, 'tablet') !== false) return 'Tablet';
-        return 'Desktop';
-    }
-
-    function detectBrowser($ua) {
-        $ua = strtolower($ua);
-        if (strpos($ua, 'chrome') !== false && strpos($ua, 'edg') === false) return 'Chrome';
-        if (strpos($ua, 'firefox') !== false) return 'Firefox';
-        if (strpos($ua, 'safari') !== false && strpos($ua, 'chrome') === false) return 'Safari';
-        if (strpos($ua, 'edg') !== false) return 'Edge';
-        if (strpos($ua, 'opr') !== false || strpos($ua, 'opera') !== false) return 'Opera';
-        return 'Other';
-    }
-
-    function detectOS($ua) {
-        $ua = strtolower($ua);
-        if (strpos($ua, 'windows') !== false) return 'Windows';
-        if (strpos($ua, 'mac') !== false) return 'MacOS';
-        if (strpos($ua, 'android') !== false) return 'Android';
-        if (strpos($ua, 'linux') !== false) return 'Linux';
-        if (strpos($ua, 'iphone') !== false || strpos($ua, 'ipad') !== false) return 'iOS';
-        return 'Other';
-    }
-
-    $device_type = detectDevice($user_agent);
-    $browser = detectBrowser($user_agent);
-    $os = detectOS($user_agent);
-
-    // === AMBIL DATA GEOLOKASI ===
-    $location = [
-        'country' => '',
-        'city' => '',
-        'region' => '',
-        'postal' => '',
-        'org' => '',
-        'asn' => '',
-        'timezone' => '',
-        'lat' => '',
-        'lon' => ''
-    ];
-
-    // Gunakan ipwho.is untuk hasil lebih lengkap
-$api_url = "https://ipwho.is/{$ip_address}";
-$context = stream_context_create(['http' => ['timeout' => 3]]);
-$response = @file_get_contents($api_url, false, $context);
-
-if ($response !== false) {
-    $data = json_decode($response, true);
-    if (!empty($data) && $data['success'] === true) {
-        $location['country'] = $data['country'] ?? '';
-        $location['region']  = $data['region'] ?? '';
-        $location['city']    = $data['city'] ?? '';
-        $location['postal']  = $data['postal'] ?? '';
-        $location['org']     = $data['connection']['org'] ?? ($data['connection']['isp'] ?? '');
-        $location['asn']     = $data['connection']['asn'] ?? '';
-        $location['timezone'] = $data['timezone']['id'] ?? '';
-        $location['lat']     = $data['latitude'] ?? '';
-        $location['lon']     = $data['longitude'] ?? '';
-    }
-} else {
-    // fallback ke ipinfo.io bila gagal
-    $backup = @file_get_contents("https://ipinfo.io/{$ip_address}/json");
-    if ($backup !== false) {
-        $info = json_decode($backup, true);
-        if (!empty($info)) {
-            $location['country'] = $info['country'] ?? '';
-            $location['city'] = $info['city'] ?? '';
-            $location['org'] = $info['org'] ?? '';
-            if (!empty($info['loc'])) {
-                list($location['lat'], $location['lon']) = explode(',', $info['loc']);
-            }
-        }
-    }
-}
-
-
-    // === SIMPAN KE DATABASE ===
-    $stmt = $conn->prepare("INSERT INTO url_clicks 
-        (url_id, ip_address, user_agent, referer, device_type, browser, os, country, city, region, postal, org, asn, timezone, latitude, longitude, clicked_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param(
-        "issssssssssssssss",
-        $url_data['id'],
-        $ip_address,
-        $user_agent,
-        $referer,
-        $device_type,
-        $browser,
-        $os,
-        $location['country'],
-        $location['city'],
-        $location['region'],
-        $location['postal'],
-        $location['org'],
-        $location['asn'],
-        $location['timezone'],
-        $location['lat'],
-        $location['lon'],
-        $timestamp
-    );
-    $stmt->execute();
-    $stmt->close();
-
-    // === One-time global ===
-    if ($url_data['one_time'] == 1) {
-        setcookie("visited_" . $short_code, "1", time() + 86400, "/");
-        if (!$requires_code) {
-            $conn->query("UPDATE urls SET status='inactive' WHERE id=" . intval($url_data['id']));
-        }
-    }
+// If access allowed and click actions weren't done yet (skip branch), perform logging and one-time marking
+if ($can_access && empty($click_actions_done)) {
+    do_click_actions($conn, $url_data, $short_code, $requires_code, $code_data);
 }
 
 function notFound($msg = "Short URL not found or inactive.") {

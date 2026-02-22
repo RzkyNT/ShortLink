@@ -22,12 +22,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $original_url_input = $_POST['original_url'] ?? [];
     $title_input = $_POST['title_public'] ?? [];
     $main_title_input = trim($_POST['main_title'] ?? '');
-    // Pastikan array datar
+    // Pastikan array datar (compatible with PHP < 7.4)
     if (is_array($original_url_input)) {
-        $original_url_input = array_map(fn($x) => is_array($x) ? implode('', $x) : $x, $original_url_input);
+        $tmp = [];
+        foreach ($original_url_input as $x) {
+            if (is_array($x)) {
+                $tmp[] = implode('', $x);
+            } else {
+                $tmp[] = $x;
+            }
+        }
+        $original_url_input = $tmp;
     }
     if (is_array($title_input)) {
-        $title_input = array_map(fn($x) => is_array($x) ? implode('', $x) : $x, $title_input);
+        $tmp = [];
+        foreach ($title_input as $x) {
+            if (is_array($x)) {
+                $tmp[] = implode('', $x);
+            } else {
+                $tmp[] = $x;
+            }
+        }
+        $title_input = $tmp;
     }
 
     // ✅ 3. Buat daftar link
@@ -92,6 +108,8 @@ if ($access_mode !== 'per_code') {
             || isset($_POST['one_time'])
         ) ? 1 : 0;
 
+        // Optional: user can request that the generated short URL include a "skip preview" flag
+        $skip_preview_input = isset($_POST['skip_preview']) ? 1 : 0;
         if ($access_mode !== 'public' && empty($original_url)) {
             $original_url = 'INDIVIDUAL_LINK_MODE';
         }
@@ -133,80 +151,100 @@ if ($access_mode !== 'per_code') {
         if (empty($error)) {
             $created_url = BASE_URL . $short_code;
 
-            ob_start();
-            QRcode::png($created_url, null, QR_ECLEVEL_L, 4);
-            $imageString = ob_get_contents();
-            ob_end_clean();
+            // Generate QR Code
+            $qr_base64 = '';
+            if (function_exists('gd_info')) {
+                ob_start();
+                \QRcode::png($created_url, null, QR_ECLEVEL_L, 4);
+                $imageString = ob_get_contents();
+                ob_end_clean();
+                $qr_base64 = 'data:image/png;base64,' . base64_encode($imageString);
+            } else {
+                error_log("GD Library not found, skipping QR code generation.");
+            }
 
-            $qr_base64 = 'data:image/png;base64,' . base64_encode($imageString);
+            $sql = "INSERT INTO urls (
+                        short_code, original_url, title, qr_base64,
+                        status, user_id, access_mode, access_password, expire_at, one_time, skip_preview
+                    ) VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)";
+            
+            $stmt = $conn->prepare($sql);
 
-            $stmt = $conn->prepare("
-                INSERT INTO urls (
-                    short_code, original_url, title, qr_base64,
-                    status, user_id, access_mode, access_password, expire_at, one_time
-                ) VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
-            ");
-            $stmt->bind_param(
-                "ssssisssi",
-                $short_code,
-                $original_url,
-                $title,
-                $qr_base64,
-                $user_id,
-                $access_mode,
-                $password_plain,
-                $expire_at,
-                $one_time
-            );
+            if (!$stmt) {
+                error_log("Prepare failed: " . $conn->error);
+                $error = "Database error: Unable to prepare statement.";
+            } else {
+                $stmt->bind_param(
+                    "ssssisssii",
+                    $short_code,
+                    $original_url,
+                    $title,
+                    $qr_base64,
+                    $user_id,
+                    $access_mode,
+                    $password_plain,
+                    $expire_at,
+                    $one_time,
+                    $skip_preview_input
+                );
 
-            if ($stmt->execute()) {
-                $url_id = $conn->insert_id;
-                error_log("URL ID created: $url_id");
+                if ($stmt->execute()) {
+                    $url_id = $conn->insert_id;
+                    error_log("URL ID created: $url_id");
 
-                // =========================
-                // Simpan peserta jika mode per_code
-                // =========================
-                if ($access_mode === 'per_code' && !empty($_POST['participants'])) {
-                    $participants = $_POST['participants'];
+                    // =========================
+                    // Simpan peserta jika mode per_code
+                    // =========================
+                    if ($access_mode === 'per_code' && !empty($_POST['participants'])) {
+                        $participants = $_POST['participants'];
 
-                    $insert_code = $conn->prepare("
-                        INSERT INTO url_codes (url_id, participant_name, code, target_url)
-                        VALUES (?, ?, ?, ?)
-                    ");
+                        $insert_code = $conn->prepare("
+                            INSERT INTO url_codes (url_id, participant_name, code, target_url, skip_preview)
+                            VALUES (?, ?, ?, ?, ?)
+                        ");
 
-                    foreach ($participants as $p) {
-                        $name   = trim($p['name'] ?? '');
-                        $code   = trim($p['code'] ?? '');
-                        $target = trim($p['target_url'] ?? '');
+                        foreach ($participants as $p) {
+                            $name   = trim($p['name'] ?? '');
+                            $code   = trim($p['code'] ?? '');
+                            $target = trim($p['target_url'] ?? '');
+                            $skip_flag = isset($p['skip_preview']) ? 1 : 0;
 
-                        if (empty($name) || empty($code) || empty($target)) continue;
+                            if (empty($name) || empty($code) || empty($target)) continue;
 
-                        // Pastikan code unik
-                        $check_code = $conn->prepare("SELECT id FROM url_codes WHERE code = ? AND url_id = ?");
-                        $check_code->bind_param("si", $code, $url_id);
-                        $check_code->execute();
-                        $exists = $check_code->get_result()->num_rows > 0;
-                        $check_code->close();
+                            // Pastikan code unik
+                            $check_code = $conn->prepare("SELECT id FROM url_codes WHERE code = ? AND url_id = ?");
+                            $check_code->bind_param("si", $code, $url_id);
+                            $check_code->execute();
+                            $exists = $check_code->get_result()->num_rows > 0;
+                            $check_code->close();
 
-                        if ($exists) continue;
+                            if ($exists) continue;
 
-                        $insert_code->bind_param("isss", $url_id, $name, $code, $target);
-                        if (!$insert_code->execute()) {
-                            error_log("Insert failed: " . $insert_code->error);
-                        } else {
-                            error_log("Insert success for $name");
+                            $insert_code->bind_param("isssi", $url_id, $name, $code, $target, $skip_flag);
+                            if (!$insert_code->execute()) {
+                                error_log("Insert failed: " . $insert_code->error);
+                            } else {
+                                error_log("Insert success for $name");
+                            }
                         }
+
+                        $insert_code->close();
                     }
 
-                    $insert_code->close();
-                }
-
                 $success = '✅ Short URL created successfully!';
+
+                // If user requested skip-preview, prepare the direct link (no query param needed)
+                if (!empty($created_url) && !empty($skip_preview_input)) {
+                    $direct_url = $created_url;
+                } else {
+                    $direct_url = '';
+                }
             } else {
                 $error = 'Error creating short URL: ' . $conn->error;
             }
 
             $stmt->close();
+        }
         }
 
         $conn->close();
@@ -718,7 +756,12 @@ html, body {
         <div class="success-container">
             <div class="result-header">
                 <span class="url-text" id="createdUrl"><?= htmlspecialchars($created_url) ?></span>
-                <button class="copy-btn"><i class="fa-solid fa-copy"></i> Copy</button>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button class="copy-btn"><i class="fa-solid fa-copy"></i> Copy</button>
+                    <?php if (!empty($direct_url)): ?>
+                        <a href="<?= htmlspecialchars($direct_url) ?>" class="btn" target="_blank">Open Direct</a>
+                    <?php endif; ?>
+                </div>
             </div>
 
             <div class="result-body">
@@ -794,12 +837,17 @@ html, body {
     <label>Password</label>
     <input type="text" name="access_password" placeholder="Optional">
     </div>
-    <label>Expiration Date</label>
+    <label>Expiration</label>
     <input type="datetime-local" name="expire_at">
 
     <div class="checkbox-group" style="margin-top: 20px;">
         <input type="checkbox" id="one_time" name="one_time">
         <label for="one_time"><span>One-time Access</span></label>
+    </div>
+
+    <div class="checkbox-group" style="margin-top: 8px;">
+        <input type="checkbox" id="skip_preview" name="skip_preview">
+        <label for="skip_preview"><span>Skip preview (direct redirect)</span></label>
     </div>
 
     <!-- PUBLIC SECTION -->
@@ -822,6 +870,10 @@ html, body {
                 <input type="text" name="participants[0][name]" placeholder="Nama Peserta">
                 <input type="text" name="participants[0][code]" placeholder="Kode Unik">
                 <input type="url" name="participants[0][target_url]" placeholder="URL Tujuan">
+                <label style="margin-left:10px; display:inline-flex; align-items:center; gap:8px;">
+                    <input type="checkbox" name="participants[0][skip_preview]">
+                    <span style="color:#ccc; font-size:14px;">Skip preview</span>
+                </label>
             </div>
         </div>
         <button type="button" id="addParticipantBtn" class="btn">+ Add Participant</button>
@@ -886,22 +938,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="text" name="participants[${idx}][name]" placeholder="Nama Peserta">
                 <input type="text" name="participants[${idx}][code]" placeholder="Kode Unik">
                 <input type="url" name="participants[${idx}][target_url]" placeholder="URL Tujuan">
+                <label style="margin-left:10px; display:inline-flex; align-items:center; gap:8px;">
+                    <input type="checkbox" name="participants[${idx}][skip_preview]">
+                    <span style="color:#ccc; font-size:14px;">Skip preview</span>
+                </label>
             `;
             container.appendChild(row);
         });
     }
 
     /* === DATETIME MINIMUM === */
-    function formatDateTime(date) {
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        const h = String(date.getHours()).padStart(2, '0');
-        const i = String(date.getMinutes()).padStart(2, '0');
+    function formatDateTime(dt) {
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        const h = String(dt.getHours()).padStart(2, '0');
+        const i = String(dt.getMinutes()).padStart(2, '0');
         return `${y}-${m}-${d}T${h}:${i}`;
     }
     document.querySelectorAll('input[type="datetime-local"]').forEach(input => {
-        input.min = formatDateTime(new Date());
+        input.min = formatDateTime(new (window['Date'])());
     });
 
     /* === ACCESS MODE SWITCH === */

@@ -61,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->close();
     $access_password = trim($_POST['access_password'] ?? '');
     $access_password = $access_password !== '' ? $access_password : null;
+    $skip_preview = isset($_POST['skip_preview']) ? 1 : 0;
 
 
     if ($access_mode === 'public') {
@@ -107,10 +108,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($error)) {
         $stmt = $conn->prepare("
             UPDATE urls 
-            SET original_url = ?, title = ?, status = ?, expire_at = ?, one_time = ?, access_password = ?
+            SET original_url = ?, title = ?, status = ?, expire_at = ?, one_time = ?, access_password = ?, skip_preview = ?
             WHERE id = ? AND user_id = ?
         ");
-        $stmt->bind_param("ssssissi", $original_url, $title, $status, $expire_at, $one_time, $access_password, $url_id, $user_id);
+        $stmt->bind_param("ssssissii", $original_url, $title, $status, $expire_at, $one_time, $access_password, $skip_preview, $url_id, $user_id);
         $stmt->execute();
         $stmt->close();
 
@@ -135,17 +136,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $name = trim($p['name'] ?? '');
                 $code = trim($p['code'] ?? '');
                 $target_url = trim($p['target_url'] ?? '');
+                $skip_flag = isset($p['skip_preview']) ? 1 : 0;
 
                 if (empty($code) || empty($target_url)) continue;
 
                 if ($pid > 0) {
-                    // Update existing participant
-                    $pstmt = $conn->prepare("UPDATE url_codes SET participant_name=?, code=?, target_url=? WHERE id=? AND url_id=?");
-                    $pstmt->bind_param("sssii", $name, $code, $target_url, $pid, $url_id);
+                    // Update existing participant (including skip_preview)
+                    $pstmt = $conn->prepare("UPDATE url_codes SET participant_name=?, code=?, target_url=?, skip_preview=? WHERE id=? AND url_id=?");
+                    $pstmt->bind_param("sssiii", $name, $code, $target_url, $skip_flag, $pid, $url_id);
                 } else {
-                    // Insert new participant
-                    $pstmt = $conn->prepare("INSERT INTO url_codes (url_id, participant_name, code, target_url) VALUES (?, ?, ?, ?)");
-                    $pstmt->bind_param("isss", $url_id, $name, $code, $target_url);
+                    // Insert new participant (including skip_preview)
+                    $pstmt = $conn->prepare("INSERT INTO url_codes (url_id, participant_name, code, target_url, skip_preview) VALUES (?, ?, ?, ?, ?)");
+                    $pstmt->bind_param("isssi", $url_id, $name, $code, $target_url, $skip_flag);
                 }
                 $pstmt->execute();
                 $pstmt->close();
@@ -156,15 +158,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!empty($deleted_ids)) {
                 $ids = array_filter(array_map('intval', explode(',', $deleted_ids)));
                 if (!empty($ids)) {
-                    $placeholders = implode(',', array_fill(0, count($ids), '?'));
-                    $types = str_repeat('i', count($ids));
-
-                    $sql = "DELETE FROM url_codes WHERE id IN ($placeholders) AND url_id = ?";
-                    $stmt = $conn->prepare($sql);
-
-                    // Gabungkan semua ID + url_id
-                    $params = [...$ids, $url_id];
-                    $stmt->bind_param($types . 'i', ...$params);
+                    $id_list = implode(',', $ids);
+                    $stmt = $conn->prepare("DELETE FROM url_codes WHERE id IN ($id_list) AND url_id = ?");
+                    $stmt->bind_param("i", $url_id);
                     $stmt->execute();
                     $stmt->close();
                 }
@@ -701,6 +697,10 @@ html, body {
                 <input type="checkbox" id="one_time" name="one_time" <?= $url_data['one_time'] ? 'checked' : '' ?>>
                 <label for="one_time">One-time Access</label>
             </div>
+        <div class="checkbox-group" style="margin-top: 8px;">
+            <input type="checkbox" id="skip_preview" name="skip_preview" <?= (!empty($url_data['skip_preview']) && $url_data['skip_preview'] == 1) ? 'checked' : '' ?>>
+            <label for="skip_preview"><span>Skip preview (direct redirect)</span></label>
+        </div>
 
         <?php if ($url_data['access_mode'] === 'public'): ?>
             <label>Original URL(s) *</label>
@@ -738,6 +738,10 @@ html, body {
                     <input type="text" name="participants[<?= $i ?>][name]" value="<?= htmlspecialchars($p['participant_name']) ?>" placeholder="Nama">
                     <input type="text" name="participants[<?= $i ?>][code]" value="<?= htmlspecialchars($p['code']) ?>" placeholder="Kode Unik">
                     <input type="url" name="participants[<?= $i ?>][target_url]" value="<?= htmlspecialchars($p['target_url']) ?>" placeholder="URL Tujuan">
+                    <label style="margin-left:10px; display:inline-flex; align-items:center; gap:8px;">
+                        <input type="checkbox" name="participants[<?= $i ?>][skip_preview]" <?= (!empty($p['skip_preview']) && $p['skip_preview']==1) ? 'checked' : '' ?>>
+                        <span style="color:#ccc; font-size:14px;">Skip preview</span>
+                    </label>
                     <button type="button" class="delete-btn" data-id="<?= $p['id'] ?>"><i class="fas fa-trash"></i></button>
                 </div>
                 <?php endforeach; ?>
@@ -810,6 +814,10 @@ document.addEventListener('click', function(e) {
         <input type="text" name="participants[${idx}][name]" placeholder="Nama">
         <input type="text" name="participants[${idx}][code]" placeholder="Kode Unik" required>
         <input type="url" name="participants[${idx}][target_url]" placeholder="URL Tujuan" required>
+        <label style="margin-left:10px; display:inline-flex; align-items:center; gap:8px;">
+            <input type="checkbox" name="participants[${idx}][skip_preview]">
+            <span style="color:#ccc; font-size:14px;">Skip preview</span>
+        </label>
         
         <button type="button" class="delete-btn new-row" onclick="removeParticipantRow('participant-row-${idx}')" title="Hapus baris ini">
             <i class="fas fa-trash"></i>
